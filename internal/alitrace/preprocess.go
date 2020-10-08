@@ -16,10 +16,6 @@ import (
 	"sync"
 )
 
-const SectionLength = 15 * 60
-const DayLength = 24 * 60 * 60
-const NumSections = DayLength / SectionLength
-const NumSectionFields = 12
 const LineBreak = '\n'
 const Splitter = ","
 const PreProcessOutputSuffix = ".preprocessed.csv"
@@ -215,12 +211,12 @@ func parseUsageData(inFile string, byteRead *int64, meta map[string][]*Container
 			logger.Printf("找到的状态不是开始，containerId：%s，行号%d\n", cid, lineNum)
 		}
 
-		sectionIndex := timestamp % DayLength / SectionLength
+		sectionIndex := timestamp % internal.DayLength / internal.SectionLength
 		cpuUtil, _ := strconv.ParseFloat(record[3], 32)
 		memUtil, _ := strconv.ParseFloat(record[4], 32)
 		sections, ok := containerSection[cid]
 		if !ok {
-			sections = make([]*sectionData, NumSections)
+			sections = make([]*sectionData, internal.NumSections)
 			for i := 0; i < len(sections); i++ {
 				sections[i] = &sectionData{
 					cpu: make([]float32, 0, 128),
@@ -261,7 +257,7 @@ func outputProcessedData(outFile string, outputHeader bool, processedSections *s
 	if outputHeader {
 		header := make([]string, 1, 1153)
 		header[0] = "container_id"
-		for i := 0; i < NumSections; i++ {
+		for i := 0; i < internal.NumSections; i++ {
 			header = append(header,
 				fmt.Sprintf("cpu_avg_%d", i),
 				fmt.Sprintf("cpu_max_%d", i),
@@ -511,7 +507,7 @@ func mergeFile(inFiles []string, outFile string) error {
 
 func imputeData(record []string) {
 	recordIndex := func(fieldIndex, sectionIndex int) int {
-		return sectionIndex*NumSectionFields + fieldIndex
+		return sectionIndex*internal.NumSectionFields + fieldIndex
 	}
 	imputeFunc := func(start, end float64, fieldIndex, leftInclusive, rightInclusive int) {
 		// +2 是因为需要保证左右有效值就是start和end，而不是第一个和最后一个NaN是start和end
@@ -522,9 +518,9 @@ func imputeData(record []string) {
 		}
 	}
 
-	for i := 0; i < NumSectionFields; i++ {
+	for i := 0; i < internal.NumSectionFields; i++ {
 		invalidLeft := -1
-		for j := 0; j < NumSections; j++ {
+		for j := 0; j < internal.NumSections; j++ {
 			if record[recordIndex(i, j)] == "NaN" {
 				if invalidLeft == -1 {
 					invalidLeft = j
@@ -549,7 +545,7 @@ func imputeData(record []string) {
 				// 这种情况是整段数据都为NaN，暂时没有办法填充
 			} else {
 				startVal, _ := strconv.ParseFloat(record[recordIndex(i, invalidLeft-1)], 64)
-				imputeFunc(startVal, 0, i, invalidLeft, NumSections-1)
+				imputeFunc(startVal, 0, i, invalidLeft, internal.NumSections-1)
 			}
 		}
 	}
@@ -580,10 +576,10 @@ func ImputeMissingValues(inFile string, outFile string) error {
 			log.Printf("第%d行记录有NaN值，正在插值\n", lineCount)
 
 			record := strings.Split(strings.TrimSpace(line), Splitter)
-			if len(record) < NumSections*NumSectionFields {
+			if len(record) < internal.NumSections*internal.NumSectionFields {
 				return errors.New("文件记录格式不对")
 			}
-			startPos := len(record) - NumSections*NumSectionFields
+			startPos := len(record) - internal.NumSections*internal.NumSectionFields
 
 			imputeData(record[startPos:])
 

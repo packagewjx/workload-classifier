@@ -26,3 +26,6 @@ gen
 
 # data files
 *.csv
+
+# log files
+*.log

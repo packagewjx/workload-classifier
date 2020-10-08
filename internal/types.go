@@ -14,3 +14,11 @@ type ProcessedSectionData struct {
 	MemP90 float32
 	MemP99 float32
 }
+
+const SectionLength = 15 * 60
+
+const DayLength = 24 * 60 * 60
+
+const NumSections = DayLength / SectionLength
+
+const NumSectionFields = 12

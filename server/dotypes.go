@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/packagewjx/workload-classifier/internal"
 	"gorm.io/gorm"
+	"time"
 )
 
 type AppDo struct {
@@ -26,8 +27,10 @@ type AppClassDO struct {
 }
 
 type ClassSectionMetricsDO struct {
-	gorm.Model
-	ClassId    uint `gorm:"uniqueIndex:unique_section"`
-	SectionNum uint `gorm:"uniqueIndex:unique_section"`
+	ID         uint `gorm:"primarykey"`
+	SectionNum uint `gorm:"primarykey"`
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	DeletedAt  gorm.DeletedAt `gorm:"index"`
 	internal.ProcessedSectionData
 }
