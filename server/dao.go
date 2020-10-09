@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/pkg/errors"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -11,6 +12,7 @@ import (
 )
 
 const databaseURL = "root:wujunxian@tcp(127.0.0.1:3306)/metrics?charset=utf8mb4&parseTime=True&loc=Local"
+const unknownNamespace = "Unknown"
 
 func init() {
 	_, err := gorm.Open(mysql.Open(databaseURL), &gorm.Config{})
@@ -29,8 +31,8 @@ type UpdateDao interface {
 
 type QueryDao interface {
 	QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error)
-	QueryAppClassIdByName(appName, namespace string) (uint, error)
-	QueryAllAppPodMetrics() (map[string][]*AppPodMetrics, error)
+	QueryAppClassIdByApp(appName, namespace string) (uint, error)
+	QueryAllAppPodMetrics() (map[string]map[string][]*AppPodMetrics, error)
 }
 
 type Dao interface {
@@ -78,7 +80,7 @@ func NewDao() (Dao, error) {
 		db:       db,
 		appIdMap: make(map[string]uint),
 		keyFunc:  keyFunc,
-		logger:   log.New(os.Stdout, "Dao: ", log.LstdFlags),
+		logger:   log.New(os.Stdout, "Dao: ", log.LstdFlags|log.Lshortfile),
 	}, nil
 }
 
@@ -165,17 +167,110 @@ func (d *daoImpl) RemoveAppPodMetricsBefore(timestamp uint64) error {
 }
 
 func (d *daoImpl) QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error) {
-	panic("implement me")
+	doarr := []*ClassSectionMetricsDO{}
+	err := d.db.Order("section_num asc").Find(&doarr, &ClassSectionMetricsDO{
+		ID: classId,
+	}).Error
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("查询ClassSectionMetricsDO出错，classID为%d", classId))
+	}
+
+	// 检查数据是否正常
+	for i := 0; i < len(doarr); i++ {
+		if doarr[i].SectionNum != uint(i) {
+			return nil, fmt.Errorf("ClassID为%d的各个数据错误，第%d条数据非第%d个Section，中间可能出现缺漏", classId, i, i)
+		}
+	}
+	if len(doarr) != internal.NumSections {
+		return nil, fmt.Errorf("ClassID为%d的数据不是%d个", classId, internal.NumSections)
+	}
+
+	result := &ClassMetrics{
+		ClassId: classId,
+		Data:    make([]*internal.ProcessedSectionData, len(doarr)),
+	}
+
+	for i := 0; i < len(doarr); i++ {
+		result.Data[i] = &internal.ProcessedSectionData{}
+		*result.Data[i] = doarr[i].ProcessedSectionData
+	}
+
+	return result, nil
 }
 
-func (d *daoImpl) QueryAppClassIdByName(appName, namespace string) (uint, error) {
-	panic("implement me")
+func (d *daoImpl) QueryAppClassIdByApp(appName, namespace string) (uint, error) {
+	appId, err := d.queryAppId(appName, namespace)
+	if err != nil {
+		return 0, err
+	}
+
+	record := &AppClassDO{}
+	err = d.db.First(record, &AppClassDO{
+		AppId: appId,
+	}).Error
+	if err != nil {
+		return 0, errors.Wrap(err, "查询AppClass时出错")
+	}
+
+	return record.ClassId, nil
 }
 
-func (d *daoImpl) QueryAllAppPodMetrics() (map[string][]*AppPodMetrics, error) {
-	panic("implement me")
+func (d *daoImpl) QueryAllAppPodMetrics() (map[string]map[string][]*AppPodMetrics, error) {
+	doarr := []*AppPodMetricsDO{}
+	err := d.db.Order("timestamp ASC").Find(&doarr).Error
+	if err != nil {
+		return nil, errors.Wrap(err, "查询所有AppPodMetrics记录出错")
+	}
+
+	type AppId struct {
+		AppName   string
+		Namespace string
+	}
+	appIdMap := make(map[uint]*AppId)
+
+	result := make(map[string]map[string][]*AppPodMetrics)
+	for _, do := range doarr {
+		appId, ok := appIdMap[do.AppId]
+
+		if !ok {
+			dest := &AppDo{}
+			err := d.db.First(dest, &AppDo{Model: gorm.Model{ID: do.AppId}}).Error
+			if err == gorm.ErrRecordNotFound {
+				log.Printf("不存在AppID为%d的记录，将会把名称设置为%d，命名空间为Unkonwn", do.AppId, do.AppId)
+				dest.AppName = fmt.Sprintf("%d", do.AppId)
+				dest.Namespace = unknownNamespace
+			} else if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("查询AppId时出错，ID为%d", do.AppId))
+			}
+
+			appId = &AppId{
+				AppName:   dest.AppName,
+				Namespace: dest.Namespace,
+			}
+			appIdMap[do.AppId] = appId
+		}
+
+		namespaceMap, ok := result[appId.Namespace]
+		if !ok {
+			namespaceMap = make(map[string][]*AppPodMetrics)
+			result[appId.Namespace] = namespaceMap
+		}
+
+		metricsArr := namespaceMap[appId.AppName]
+		metricsArr = append(metricsArr, &AppPodMetrics{
+			AppName:   appId.AppName,
+			Namespace: appId.Namespace,
+			Timestamp: do.Timestamp,
+			Cpu:       do.Cpu,
+			Mem:       do.Mem,
+		})
+		namespaceMap[appId.AppName] = metricsArr
+	}
+
+	return result, nil
 }
 
+// 根据AppName和namespace查询AppID，若不存在，则创建一条记录。
 func (d *daoImpl) queryAppId(name, namespace string) (uint, error) {
 	key := d.keyFunc(name, namespace)
 	id, ok := d.appIdMap[key]
