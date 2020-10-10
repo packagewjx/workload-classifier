@@ -35,10 +35,11 @@ const (
 const minDuration = 24 * time.Hour
 
 type ServerConfig struct {
-	MetricDuration time.Duration // 给每个应用保留的数据的时间长度
-	Port           int           // 本服务器监听端口
-	ScrapeInterval time.Duration // 从metrics server获取数据的周期。至少为15s。
-	ReClusterTime  time.Duration // 再聚类的时间
+	MetricDuration       time.Duration // 给每个应用保留的数据的时间长度
+	Port                 int           // 本服务器监听端口
+	ScrapeInterval       time.Duration // 从metrics server获取数据的周期。至少为15s。
+	ReClusterTime        time.Duration // 再聚类的时间
+	InitialCenterCsvFile string        // 初始各类中心的数据文件。若不是空，则会清空数据库的数据并读取。若为空，则使用数据库数据，此时如果数据库没有类别数据，则会产生错误。
 }
 
 func (s ServerConfig) String() string {
@@ -95,10 +96,13 @@ func checkConfig(ctx *ServerConfig) error {
 func (s *serverImpl) Start() error {
 	rootCtx, cancel := context.WithCancel(context.Background())
 	scraperContext, _ := context.WithCancel(rootCtx)
+	reClustererContext, _ := context.WithCancel(rootCtx)
 
 	s.logger.Printf("服务器启动。配置：%v\n", s.config)
 
 	go s.scrapper(scraperContext)
+
+	go s.reClusterer(reClustererContext)
 
 	// 注册信号接收器
 	termSigChan := make(chan os.Signal)
@@ -115,9 +119,10 @@ func (s *serverImpl) Start() error {
 // 用于从metrics server获取数据并保存到数据库的goroutine主函数
 func (s *serverImpl) scrapper(ctx context.Context) {
 	s.logger.Println("监控数据获取线程启动")
+	tickCh := time.Tick(s.config.ScrapeInterval)
 	for {
 		select {
-		case <-time.After(s.config.ScrapeInterval):
+		case <-tickCh:
 			podMetrics, err := s.scrapePodMetrics()
 			if err != nil {
 				panic(err)

@@ -409,3 +409,25 @@ func TestDaoImpl_QueryAllAppPodMetrics(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 1, len(a))
 }
+
+func TestDaoImpl_RemoveAllClassMetrics(t *testing.T) {
+	dao, _ := NewDao()
+	db := dao.(*daoImpl).db
+	for i := 0; i < 10; i++ {
+		err := db.Create(&ClassSectionMetricsDO{}).Error
+		if !assert.NoError(t, err) {
+			assert.FailNow(t, "创建初始数据出错")
+		}
+	}
+
+	arr := []*ClassSectionMetricsDO{}
+	db.Find(&arr)
+	assert.NotEqual(t, 0, len(arr))
+
+	err := dao.RemoveAllClassMetrics()
+	assert.NoError(t, err)
+
+	arr = []*ClassSectionMetricsDO{}
+	db.Find(&arr)
+	assert.Equal(t, 0, len(arr))
+}

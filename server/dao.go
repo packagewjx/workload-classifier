@@ -21,6 +21,8 @@ type UpdateDao interface {
 
 	// 永久删除timestamp之前的数据
 	RemoveAppPodMetricsBefore(timestamp uint64) error
+	// 删除所有存在的ClassMetrics
+	RemoveAllClassMetrics() error
 }
 
 type QueryDao interface {
@@ -176,6 +178,10 @@ func (d *daoImpl) SaveAllAppPodMetrics(arr []*AppPodMetrics) error {
 
 func (d *daoImpl) RemoveAppPodMetricsBefore(timestamp uint64) error {
 	return d.db.Model(&AppPodMetricsDO{}).Unscoped().Where("timestamp < ?", timestamp).Delete(&AppPodMetricsDO{}).Error
+}
+
+func (d *daoImpl) RemoveAllClassMetrics() error {
+	return d.db.Model(&ClassSectionMetricsDO{}).Where("1 = 1").Delete(&ClassSectionMetricsDO{}).Error
 }
 
 func (d *daoImpl) QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error) {
