@@ -8,14 +8,13 @@ import (
 
 type AppDo struct {
 	gorm.Model
-	AppName   string `gorm:"uniqueIndex:unique_app;type:VARCHAR(256)"`
-	Namespace string `gorm:"uniqueIndex:unique_app;type:VARCHAR(256)"`
+	AppName
 }
 
 type AppPodMetricsDO struct {
 	gorm.Model
 	AppId     uint   `gorm:"uniqueIndex:unique_record"`
-	Timestamp uint64 `gorm:"uniqueIndex:unique_record"`
+	Timestamp uint64 `gorm:"uniqueIndex:unique_record,priority:9"`
 	Cpu       float32
 	Mem       float32
 }

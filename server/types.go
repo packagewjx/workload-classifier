@@ -5,20 +5,23 @@ import (
 )
 
 type AppPodMetrics struct {
-	AppName   string
-	Namespace string
+	AppName
 	Timestamp uint64  `gorm:"uniqueIndex:record"`
 	Cpu       float32 `gorm:"not null;precision:2"`
 	Mem       float32 `gorm:"not null:precision:2"`
 }
 
 type AppClass struct {
-	AppName   string `gorm:"uniqueIndex:app;type:VARCHAR(256)"`
-	Namespace string `gorm:"uniqueIndex:app;type:VARCHAR(256)"`
-	ClassId   uint
+	AppName
+	ClassId uint
 }
 
 type ClassMetrics struct {
 	ClassId uint
 	Data    []*internal.ProcessedSectionData
+}
+
+type AppName struct {
+	Name      string `gorm:"uniqueIndex:app;type:VARCHAR(256)"`
+	Namespace string `gorm:"uniqueIndex:app;type:VARCHAR(256)"`
 }
