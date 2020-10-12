@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -211,6 +212,8 @@ func parseUsageData(inFile string, byteRead *int64, meta map[string][]*Container
 			logger.Printf("找到的状态不是开始，containerId：%s，行号%d\n", cid, lineNum)
 		}
 
+		// statuses留作后用
+
 		sectionIndex := timestamp % internal.DayLength / internal.SectionLength
 		cpuUtil, _ := strconv.ParseFloat(record[3], 32)
 		memUtil, _ := strconv.ParseFloat(record[4], 32)
@@ -226,8 +229,8 @@ func parseUsageData(inFile string, byteRead *int64, meta map[string][]*Container
 			containerSection[cid] = sections
 		}
 
-		cpu := cpuUtil / 100.0 * float64(statuses[statusIdx].CpuRequest)
-		mem := memUtil / 100.0 * float64(statuses[statusIdx].MemSize)
+		cpu := cpuUtil
+		mem := memUtil
 
 		sect := sections[sectionIndex]
 		sect.cpu = append(sect.cpu, float32(cpu))
@@ -244,7 +247,7 @@ func outputProcessedData(outFile string, outputHeader bool, processedSections *s
 	// 输出数据
 	fout, err := os.Create(outFile)
 	if err != nil {
-		return errors.Wrap(err, "创建输出文件失败")
+		return errors.Wrap(err, fmt.Sprintf("创建输出文件%s失败", outFile))
 	}
 	writer := csv.NewWriter(fout)
 
@@ -313,6 +316,89 @@ func outputProcessedData(outFile string, outputHeader bool, processedSections *s
 	}
 
 	return nil
+}
+
+func normalizeSectionData(data []*internal.ProcessedSectionData) {
+	typ := reflect.TypeOf(internal.ProcessedSectionData{})
+	dataVal := make([]reflect.Value, len(data))
+	for i, datum := range data {
+		dataVal[i] = reflect.ValueOf(datum)
+	}
+
+	// 寻找CPU和Mem的最大值
+	maxCpu := float32(0)
+	maxMem := float32(0)
+	for i := 0; i < len(data); i++ {
+		if maxCpu < data[i].CpuMax {
+			maxCpu = data[i].CpuMax
+		}
+		if maxMem < data[i].MemMax {
+			maxMem = data[i].MemMax
+		}
+	}
+
+	for i := 0; i < typ.NumField(); i++ {
+		fieldName := typ.Field(i).Name
+		max := float32(0)
+		if -1 != strings.Index(fieldName, "Cpu") {
+			max = maxCpu
+		} else if -1 != strings.Index(fieldName, "Mem") {
+			max = maxMem
+		}
+		if max == 0 {
+			continue
+		}
+
+		for _, datum := range dataVal {
+			field := datum.Elem().FieldByName(fieldName)
+			field.SetFloat(field.Float() / float64(max))
+		}
+	}
+
+	return
+}
+
+func NormalizeSection(inFile string, outFile string) error {
+	file, err := os.Open(inFile)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("打开输入文件%s失败", inFile))
+	}
+	log.Println("正在读取数据")
+	records, err := csv.NewReader(file).ReadAll()
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("读取输入文件%s失败", inFile))
+	}
+
+	outputMap := &sync.Map{}
+
+	log.Println("读取完毕，正在转换数据")
+	wg := sync.WaitGroup{}
+	for i, record := range records {
+		if len(record) < internal.NumSectionFields*internal.NumSections {
+			return errors.Wrap(err, fmt.Sprintf("第%d行数据有问题，数据长度不足%d",
+				i, internal.NumSectionFields*internal.NumSections))
+		}
+		wg.Add(1)
+		go func(record []string) {
+			defer wg.Done()
+
+			data := record[len(record)-internal.NumSectionFields*internal.NumSections:]
+			name := fmt.Sprintf("%d", i)
+			if len(data) <= len(record) {
+				name = record[0]
+			}
+			array, err := recordsToSectionArray(data)
+			if err != nil {
+				panic(errors.Wrap(err, fmt.Sprintf("解析第%d行数据失败", i)))
+			}
+			normalizeSectionData(array)
+			outputMap.Store(name, array)
+		}(record)
+	}
+	wg.Wait()
+
+	log.Println("转换完毕，正在写出数据")
+	return outputProcessedData(outFile, false, outputMap)
 }
 
 func processSectionData(containerSection map[string][]*sectionData) *sync.Map {

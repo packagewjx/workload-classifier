@@ -1,6 +1,12 @@
 package alitrace
 
-import "math"
+import (
+	"fmt"
+	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/pkg/errors"
+	"math"
+	"strconv"
+)
 
 func getSortedPositionValue(arr []float32, pos int) float32 {
 	if pos < 0 || pos >= len(arr) {
@@ -49,4 +55,36 @@ func partition(arr []float32, l, r int) int {
 	slice[i] = pivot
 
 	return l + i
+}
+
+func recordsToSectionArray(record []string) ([]*internal.ProcessedSectionData, error) {
+	arr := make([]*internal.ProcessedSectionData, internal.NumSections)
+	for s := 0; s < internal.NumSections; s++ {
+		floatArr := make([]float32, internal.NumSectionFields)
+		for fi := 0; fi < len(floatArr); fi++ {
+			f, err := strconv.ParseFloat(record[s*internal.NumSectionFields+fi], 32)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("第%d个数据有问题，数据为：%s",
+					s*internal.NumSectionFields+fi, record[s*internal.NumSectionFields+fi]))
+			}
+			floatArr[fi] = float32(f)
+		}
+
+		arr[s] = &internal.ProcessedSectionData{
+			CpuAvg: floatArr[0],
+			CpuMax: floatArr[1],
+			CpuMin: floatArr[2],
+			CpuP50: floatArr[3],
+			CpuP90: floatArr[4],
+			CpuP99: floatArr[5],
+			MemAvg: floatArr[6],
+			MemMax: floatArr[7],
+			MemMin: floatArr[8],
+			MemP50: floatArr[9],
+			MemP90: floatArr[10],
+			MemP99: floatArr[11],
+		}
+	}
+
+	return arr, nil
 }

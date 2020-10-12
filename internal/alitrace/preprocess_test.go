@@ -75,3 +75,32 @@ func TestImputeData(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalize(t *testing.T) {
+	arr := make([]*internal.ProcessedSectionData, internal.NumSections)
+	for i := 0; i < len(arr); i++ {
+		arr[i] = &internal.ProcessedSectionData{
+			CpuAvg: float32(i),
+			CpuMax: float32(i),
+			CpuMin: float32(i),
+			CpuP50: float32(i),
+			CpuP90: float32(i),
+			CpuP99: float32(i),
+			MemAvg: float32(i),
+			MemMax: float32(i),
+			MemMin: float32(i),
+			MemP50: float32(i),
+			MemP90: float32(i),
+			MemP99: float32(i),
+		}
+	}
+
+	normalizeSectionData(arr)
+
+	for i := 0; i < len(arr)-1; i++ {
+		assert.Condition(t, func() (success bool) {
+			return arr[i].CpuAvg < 1
+		})
+	}
+	assert.Equal(t, float32(1), arr[len(arr)-1].CpuAvg)
+}

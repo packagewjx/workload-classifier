@@ -1,5 +1,7 @@
 package internal
 
+import "reflect"
+
 type ProcessedSectionData struct {
 	CpuAvg float32
 	CpuMax float32
@@ -21,4 +23,4 @@ const DayLength = 24 * 60 * 60
 
 const NumSections = DayLength / SectionLength
 
-const NumSectionFields = 12
+var NumSectionFields = reflect.TypeOf(ProcessedSectionData{}).NumField()

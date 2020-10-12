@@ -1,9 +1,11 @@
 package alitrace
 
 import (
+	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sort"
+	"strconv"
 	"testing"
 )
 
@@ -54,4 +56,23 @@ func TestGetSortedPosition(t *testing.T) {
 	assert.Equal(t, arr[2000], p2000)
 	assert.Equal(t, arr[5000], p5000)
 	assert.Equal(t, arr[9999], p9999)
+}
+
+func TestRecordToSectionData(t *testing.T) {
+	record := make([]string, internal.NumSections*internal.NumSectionFields)
+	for i := 0; i < len(record); i++ {
+		record[i] = strconv.FormatFloat(float64(i+1), 'f', 2, 32)
+	}
+
+	array, err := recordsToSectionArray(record)
+	assert.NoError(t, err)
+	for _, data := range array {
+		assert.NotEqual(t, float32(0), data.CpuAvg)
+	}
+	assert.Equal(t, float32(1), array[0].CpuAvg)
+	assert.Equal(t, float32(internal.NumSectionFields*internal.NumSections), array[len(array)-1].MemP99)
+
+	record[internal.NumSections] = ""
+	_, err = recordsToSectionArray(record)
+	assert.Error(t, err)
 }
