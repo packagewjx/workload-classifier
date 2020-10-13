@@ -5,10 +5,10 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/internal/utils"
 	"github.com/pkg/errors"
 	"io"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -77,35 +77,15 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 
 		c := &ClassMetrics{
 			ClassId: 0,
-			Data:    make([]*internal.ProcessedSectionData, internal.NumSections),
+			Data:    make([]*internal.SectionData, internal.NumSections),
 		}
 
-		for i := 0; i < internal.NumSections; i++ {
-			arr := make([]float32, internal.NumSectionFields)
-			for j := 0; j < internal.NumSectionFields; j++ {
-				f, err := strconv.ParseFloat(record[i*internal.NumSectionFields+j], 32)
-				if err != nil {
-					return nil, errors.Wrap(err, fmt.Sprintf("第%d行第%d个数据有问题，数据为%s",
-						i, i*internal.NumSectionFields+j, record[i*internal.NumSectionFields+j]))
-				}
-				arr[j] = float32(f)
-			}
-
-			c.Data[i] = &internal.ProcessedSectionData{
-				CpuAvg: arr[0],
-				CpuMax: arr[1],
-				CpuMin: arr[2],
-				CpuP50: arr[3],
-				CpuP90: arr[4],
-				CpuP99: arr[5],
-				MemAvg: arr[6],
-				MemMax: arr[7],
-				MemMin: arr[8],
-				MemP50: arr[9],
-				MemP90: arr[10],
-				MemP99: arr[11],
-			}
+		array, err := utils.RecordsToSectionArray(record)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("第%d行数据有问题", i))
 		}
+		c.Data = array
+
 		result = append(result, c)
 	}
 

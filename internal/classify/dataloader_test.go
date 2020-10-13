@@ -1,15 +1,19 @@
 package classify
 
 import (
-	"fmt"
+	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
 func TestLoadCsv(t *testing.T) {
 	loader := &csvLoader{}
-	datum, err := loader.Load("../c_15794.csv", []int{0, 1, 5, 6, 7})
+	file, _ := os.Open("../../test/csv/container_meta.csv")
+
+	data, err := loader.Load(file, []int{0, 1, 3, 4})
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Println(datum)
+	assert.NotEqual(t, 0, len(data))
+	assert.Equal(t, 4, len(data[0]))
 }

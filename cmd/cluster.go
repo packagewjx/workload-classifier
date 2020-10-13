@@ -18,8 +18,10 @@ package cmd
 import (
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal/classify"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 )
@@ -70,7 +72,7 @@ var clusterCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var algType classify.AlgorithmType
 		var context interface{}
 		switch algorithm {
@@ -86,11 +88,15 @@ var clusterCmd = &cobra.Command{
 			dataType = classify.CSV
 		}
 		loader := classify.NewDataLoader(dataType)
+
 		log.Println("读取数据中")
-		data, err := loader.Load(args[0], removeColumn)
+		inFile, err := os.Open(args[0])
 		if err != nil {
-			log.Fatalln("读取错误", err)
-			return
+			return errors.Wrap(err, "打开输入文件错误")
+		}
+		data, err := loader.Load(inFile, removeColumn)
+		if err != nil {
+			return errors.Wrap(err, "读取错误")
 		}
 		log.Println("读取数据完成")
 
@@ -99,26 +105,23 @@ var clusterCmd = &cobra.Command{
 		centers, _ := alg.Run(data, int(numClass), context)
 		log.Println("运行K-Means算法完成")
 
-		err = classify.OutputResult(centers, args[1], outputPrecision)
+		fout, err := os.Create(args[1])
 		if err != nil {
-			log.Fatalln("输出文件错误", err)
-			return
+			return errors.Wrap(err, "创建输出文件错误")
 		}
+		err = classify.OutputResult(centers, fout, outputPrecision)
+		if err != nil {
+			return errors.Wrap(err, "输出文件错误")
+		}
+
+		_ = fout.Close()
+		_ = inFile.Close()
+		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(clusterCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// clusterCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// clusterCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	clusterCmd.Flags().StringVarP(&algorithm, AlgorithmFlag, "a", AlgorithmKMeans,
 		"指定使用的算法。默认为kmeans，可选值：kmeans")

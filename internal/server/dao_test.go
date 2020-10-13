@@ -142,10 +142,10 @@ func TestDaoImpl_SaveAppClass(t *testing.T) {
 func TestDaoImpl_SaveClassMetrics(t *testing.T) {
 	c := &ClassMetrics{
 		ClassId: 10,
-		Data:    make([]*internal.ProcessedSectionData, internal.NumSections),
+		Data:    make([]*internal.SectionData, internal.NumSections),
 	}
 	for i := 0; i < len(c.Data); i++ {
-		c.Data[i] = &internal.ProcessedSectionData{}
+		c.Data[i] = &internal.SectionData{}
 		c.Data[i].CpuAvg = float32(i)
 		c.Data[i].CpuMax = float32(i)
 		c.Data[i].CpuMin = float32(i)
@@ -216,10 +216,10 @@ func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 	classId := uint(10)
 	c := &ClassMetrics{
 		ClassId: classId,
-		Data:    make([]*internal.ProcessedSectionData, internal.NumSections),
+		Data:    make([]*internal.SectionData, internal.NumSections),
 	}
 	for i := 0; i < len(c.Data); i++ {
-		c.Data[i] = &internal.ProcessedSectionData{
+		c.Data[i] = &internal.SectionData{
 			CpuAvg: float32(i),
 			CpuMax: float32(i),
 			CpuMin: float32(i),
@@ -257,9 +257,9 @@ func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 	db := dao.(*daoImpl).db
 	classId = 10000
 	err = db.Create(&ClassSectionMetricsDO{
-		ID:                   classId,
-		SectionNum:           10,
-		ProcessedSectionData: internal.ProcessedSectionData{},
+		ID:          classId,
+		SectionNum:  10,
+		SectionData: internal.SectionData{},
 	}).Error
 	if !assert.NoError(t, err) {
 		assert.FailNow(t, "插入缺漏数据出错")
@@ -273,10 +273,10 @@ func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 	classId = 10001
 	c = &ClassMetrics{
 		ClassId: classId,
-		Data:    make([]*internal.ProcessedSectionData, 10),
+		Data:    make([]*internal.SectionData, 10),
 	}
 	for i := 0; i < len(c.Data); i++ {
-		c.Data[i] = &internal.ProcessedSectionData{}
+		c.Data[i] = &internal.SectionData{}
 	}
 	err = dao.SaveClassMetrics(c)
 	if !assert.NoError(t, err) {

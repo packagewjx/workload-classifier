@@ -17,7 +17,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/server"
+	"github.com/packagewjx/workload-classifier/internal/server"
 	"github.com/spf13/cobra"
 	"time"
 )

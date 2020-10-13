@@ -16,8 +16,9 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
 	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/packagewjx/workload-classifier/internal/utils"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"os"
 )
@@ -35,20 +36,33 @@ var (
 // splitCmd represents the split command
 var splitCmd = &cobra.Command{
 	Use:   "split",
-	Short: "根据AppDU，将container_usage.csv分割成小文件，然后结束运行",
-	Run: func(cmd *cobra.Command, args []string) {
-		meta, err := alitrace.LoadContainerMeta(metaFile)
+	Short: "根据AppDU将container_usage.csv分割成小文件",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fin, err := os.Open(metaFile)
 		if err != nil {
-			fmt.Printf("读取元数据错误：%v\n", err)
-			os.Exit(1)
+			return errors.Wrap(err, "打开元数据文件错误")
 		}
+		meta, err := alitrace.LoadContainerMeta(fin)
+		if err != nil {
+			return errors.Wrap(err, "读取元数据错误")
+		}
+		_ = fin.Close()
 
-		cnt := 0
-		err = alitrace.SplitContainerUsage(usageFile, meta, &cnt)
+		fin, err = os.Open(usageFile)
 		if err != nil {
-			fmt.Printf("分割出错：%v\n", err)
-			os.Exit(1)
+			return errors.Wrap(err, "打开输入文件错误")
 		}
+		finCounter := &utils.ReadCounter{
+			Count:  0,
+			Reader: fin,
+		}
+		err = alitrace.SplitContainerUsage(finCounter, meta)
+		if err != nil {
+			return errors.Wrap(err, "分割出错")
+		}
+		_ = fin.Close()
+
+		return nil
 	},
 }
 

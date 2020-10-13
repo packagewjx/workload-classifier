@@ -18,6 +18,8 @@ package cmd
 import (
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/pkg/errors"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -32,11 +34,20 @@ var normalizeCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
-		err := alitrace.NormalizeSection(args[0], args[1])
+	RunE: func(cmd *cobra.Command, args []string) error {
+		in, err := os.Open(args[0])
 		if err != nil {
-			panic(err)
+			return errors.Wrap(err, "打开输入文件错误")
 		}
+		out, err := os.Create(args[1])
+		if err != nil {
+			return errors.Wrap(err, "创建输出文件错误")
+		}
+		defer func() {
+			_ = out.Close()
+		}()
+
+		return alitrace.NormalizeSection(in, out)
 	},
 }
 

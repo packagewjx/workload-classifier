@@ -31,5 +31,5 @@ type ClassSectionMetricsDO struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
-	internal.ProcessedSectionData
+	internal.SectionData
 }

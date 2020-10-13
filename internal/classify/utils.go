@@ -3,16 +3,12 @@ package classify
 import (
 	"encoding/csv"
 	"github.com/pkg/errors"
-	"os"
+	"io"
 	"strconv"
 )
 
-func OutputResult(data [][]float32, outFile string, precision int) error {
-	fout, err := os.Create(outFile)
-	if err != nil {
-		return errors.Wrap(err, "创建输出文件失败")
-	}
-	writer := csv.NewWriter(fout)
+func OutputResult(data [][]float32, output io.Writer, precision int) error {
+	writer := csv.NewWriter(output)
 	for _, datum := range data {
 		record := make([]string, len(datum))
 		for i, f := range datum {
@@ -25,6 +21,5 @@ func OutputResult(data [][]float32, outFile string, precision int) error {
 	}
 
 	writer.Flush()
-	_ = fout.Close()
 	return nil
 }

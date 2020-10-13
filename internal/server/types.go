@@ -18,7 +18,7 @@ type AppClass struct {
 
 type ClassMetrics struct {
 	ClassId uint
-	Data    []*internal.ProcessedSectionData
+	Data    []*internal.SectionData
 }
 
 type AppName struct {

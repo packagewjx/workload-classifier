@@ -16,9 +16,10 @@ limitations under the License.
 package cmd
 
 import (
-	"errors"
 	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 // imputeCmd represents the impute command
@@ -36,7 +37,16 @@ var imputeCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return alitrace.ImputeMissingValues(args[0], args[1])
+		fin, err := os.Open(args[0])
+		if err != nil {
+			return errors.Wrap(err, "打开输入文件错误")
+		}
+		fout, err := os.Create(args[1])
+		if err != nil {
+			return errors.Wrap(err, "创建输出文件错误")
+		}
+
+		return alitrace.ImputeMissingValues(fin, fout)
 	},
 }
 

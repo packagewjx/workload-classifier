@@ -6,12 +6,11 @@ import (
 	"io"
 	"log"
 	"math"
-	"os"
 	"strconv"
 )
 
 type DataFileLoader interface {
-	Load(fileName string, removeColumn []int) ([][]float32, error)
+	Load(fin io.Reader, removeColumn []int) ([][]float32, error)
 }
 
 type DataFormat string
@@ -32,11 +31,7 @@ func NewDataLoader(format DataFormat) DataFileLoader {
 type csvLoader struct {
 }
 
-func (c *csvLoader) Load(fileName string, removeColumn []int) ([][]float32, error) {
-	fin, err := os.Open(fileName)
-	if err != nil {
-		return nil, errors.Wrap(err, "打开csv文件出错")
-	}
+func (c *csvLoader) Load(fin io.Reader, removeColumn []int) ([][]float32, error) {
 	reader := csv.NewReader(fin)
 
 	data := make([][]float32, 0, 16)
@@ -47,6 +42,7 @@ func (c *csvLoader) Load(fileName string, removeColumn []int) ([][]float32, erro
 	}
 
 	var record []string
+	var err error
 	recordRead := 0
 	for record, err = reader.Read(); err == nil; record, err = reader.Read() {
 		recordRead++

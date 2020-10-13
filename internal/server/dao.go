@@ -84,9 +84,9 @@ func (d *daoImpl) SaveClassMetrics(c *ClassMetrics) error {
 	doarr := make([]*ClassSectionMetricsDO, len(c.Data))
 	for i, datum := range c.Data {
 		doarr[i] = &ClassSectionMetricsDO{
-			ID:                   c.ClassId,
-			SectionNum:           uint(i),
-			ProcessedSectionData: *datum,
+			ID:          c.ClassId,
+			SectionNum:  uint(i),
+			SectionData: *datum,
 		}
 	}
 
@@ -205,12 +205,12 @@ func (d *daoImpl) QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error
 
 	result := &ClassMetrics{
 		ClassId: classId,
-		Data:    make([]*internal.ProcessedSectionData, len(doarr)),
+		Data:    make([]*internal.SectionData, len(doarr)),
 	}
 
 	for i := 0; i < len(doarr); i++ {
-		result.Data[i] = &internal.ProcessedSectionData{}
-		*result.Data[i] = doarr[i].ProcessedSectionData
+		result.Data[i] = &internal.SectionData{}
+		*result.Data[i] = doarr[i].SectionData
 	}
 
 	return result, nil

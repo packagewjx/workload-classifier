@@ -12,7 +12,7 @@ import (
 )
 
 func TestReadInitialCenters(t *testing.T) {
-	f, _ := os.Open("../test/csv/centers.csv")
+	f, _ := os.Open("../../test/csv/centers.csv")
 	centers, err := readInitialCenter(f)
 	assert.NoError(t, err)
 	assert.Equal(t, 20, len(centers))

@@ -1,4 +1,4 @@
-package alitrace
+package utils
 
 import (
 	"fmt"
@@ -8,14 +8,14 @@ import (
 	"strconv"
 )
 
-func getSortedPositionValue(arr []float32, pos int) float32 {
+func GetSortedPositionValue(arr []float32, pos int) float32 {
 	if pos < 0 || pos >= len(arr) {
 		return float32(math.NaN())
 	}
 
 	l := 0
 	r := len(arr) - 1
-	for idx := partition(arr, l, r); idx != pos && l+1 < r; idx = partition(arr, l, r) {
+	for idx := Partition(arr, l, r); idx != pos && l+1 < r; idx = Partition(arr, l, r) {
 		if idx < pos {
 			l = idx + 1
 		} else if idx > pos {
@@ -26,7 +26,7 @@ func getSortedPositionValue(arr []float32, pos int) float32 {
 	return arr[pos]
 }
 
-func partition(arr []float32, l, r int) int {
+func Partition(arr []float32, l, r int) int {
 	slice := arr[l : r+1]
 
 	if len(slice) == 0 {
@@ -57,8 +57,30 @@ func partition(arr []float32, l, r int) int {
 	return l + i
 }
 
-func recordsToSectionArray(record []string) ([]*internal.ProcessedSectionData, error) {
-	arr := make([]*internal.ProcessedSectionData, internal.NumSections)
+func RecordToContainerWorkloadData(record []string) (*internal.ContainerWorkloadData, error) {
+	name := ""
+
+	if len(record) < internal.NumSectionFields*internal.NumSections {
+		return nil, fmt.Errorf("数据有误")
+	}
+
+	if len(record) > internal.NumSections*internal.NumSectionFields {
+		name = record[0]
+	}
+
+	array, err := RecordsToSectionArray(record[len(record)-internal.NumSectionFields*internal.NumSections:])
+	if err != nil {
+		return nil, err
+	}
+
+	return &internal.ContainerWorkloadData{
+		ContainerId: name,
+		Data:        array,
+	}, nil
+}
+
+func RecordsToSectionArray(record []string) ([]*internal.SectionData, error) {
+	arr := make([]*internal.SectionData, internal.NumSections)
 	for s := 0; s < internal.NumSections; s++ {
 		floatArr := make([]float32, internal.NumSectionFields)
 		for fi := 0; fi < len(floatArr); fi++ {
@@ -70,7 +92,7 @@ func recordsToSectionArray(record []string) ([]*internal.ProcessedSectionData, e
 			floatArr[fi] = float32(f)
 		}
 
-		arr[s] = &internal.ProcessedSectionData{
+		arr[s] = &internal.SectionData{
 			CpuAvg: floatArr[0],
 			CpuMax: floatArr[1],
 			CpuMin: floatArr[2],
