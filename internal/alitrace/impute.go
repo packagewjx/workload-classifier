@@ -4,55 +4,52 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/internal/utils"
 	"github.com/pkg/errors"
 	"io"
 	"log"
-	"strconv"
+	"math"
+	"reflect"
 	"strings"
 )
 
-// TODO 使用float数组而不是string
-func imputeData(record []string) {
-	recordIndex := func(fieldIndex, sectionIndex int) int {
-		return sectionIndex*internal.NumSectionFields + fieldIndex
-	}
-	imputeFunc := func(start, end float64, fieldIndex, leftInclusive, rightInclusive int) {
-		// +2 是因为需要保证左右有效值就是start和end，而不是第一个和最后一个NaN是start和end
-		// data[leftInclusive-1]=start data[rightInclusive+1]=end
-		k := (end - start) / float64(rightInclusive-leftInclusive+2)
-		for i := leftInclusive; i <= rightInclusive; i++ {
-			record[recordIndex(fieldIndex, i)] = fmt.Sprintf("%.2f", start+k*float64(i-(leftInclusive-1)))
-		}
-	}
-
-	for i := 0; i < internal.NumSectionFields; i++ {
+func ImputeWorkloadData(workload *internal.ContainerWorkloadData) {
+	for fi := 0; fi < internal.NumSectionFields; fi++ {
 		invalidLeft := -1
-		for j := 0; j < internal.NumSections; j++ {
-			if record[recordIndex(i, j)] == "NaN" {
+		for si := 0; si < len(workload.Data); si++ {
+			f := reflect.ValueOf(workload.Data[si]).Elem().Field(fi).Float()
+			if math.IsNaN(f) {
 				if invalidLeft == -1 {
-					invalidLeft = j
+					invalidLeft = si
 				}
 			} else {
 				if invalidLeft != -1 {
 					startVal := 0.0
 					if invalidLeft != 0 {
-						startVal, _ = strconv.ParseFloat(record[recordIndex(i, invalidLeft-1)], 64)
+						startVal = reflect.ValueOf(workload.Data[invalidLeft-1]).Elem().Field(fi).Float()
 					}
-					endVal, _ := strconv.ParseFloat(record[recordIndex(i, j)], 64)
+					endVal := f
 
-					imputeFunc(startVal, endVal, i, invalidLeft, j-1)
+					// 线性填充
+					k := (endVal - startVal) / float64(si-invalidLeft+1)
+					for i := invalidLeft; i < si; i++ {
+						reflect.ValueOf(workload.Data[i]).Elem().Field(fi).SetFloat(startVal + k*float64(i-(invalidLeft-1)))
+					}
+
 					invalidLeft = -1
 				}
 			}
 		}
 
-		// 检查最后的区间是否为NaN
 		if invalidLeft != -1 {
 			if invalidLeft == 0 {
-				// 这种情况是整段数据都为NaN，暂时没有办法填充
+				// 整段都是NaN
 			} else {
-				startVal, _ := strconv.ParseFloat(record[recordIndex(i, invalidLeft-1)], 64)
-				imputeFunc(startVal, 0, i, invalidLeft, internal.NumSections-1)
+				startVal := reflect.ValueOf(workload.Data[invalidLeft-1]).Elem().Field(fi).Float()
+				k := (-startVal) / float64(len(workload.Data)-invalidLeft+1)
+				for i := invalidLeft; i < len(workload.Data); i++ {
+					reflect.ValueOf(workload.Data[i]).Elem().Field(fi).SetFloat(startVal + k*float64(i-(invalidLeft-1)))
+				}
 			}
 		}
 	}
@@ -73,14 +70,13 @@ func ImputeMissingValues(in io.Reader, out io.Writer) error {
 		if strings.Contains(line, "NaN") {
 			log.Printf("第%d行记录有NaN值，正在插值\n", lineCount)
 
-			record := strings.Split(strings.TrimSpace(line), internal.Splitter)
-			if len(record) < internal.NumSections*internal.NumSectionFields {
-				return errors.New("文件记录格式不对")
+			data, err := utils.RecordToContainerWorkloadData(strings.Split(line, internal.Splitter))
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("第%d行数据错误", lineCount))
 			}
-			startPos := len(record) - internal.NumSections*internal.NumSectionFields
+			ImputeWorkloadData(data)
 
-			imputeData(record[startPos:])
-
+			record := utils.WorkloadDataToStringRecord(data)
 			line = strings.Join(record, internal.Splitter) + string(internal.LineBreak)
 		}
 		n, err := writer.WriteString(line)

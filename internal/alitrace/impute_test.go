@@ -36,12 +36,13 @@ func TestImputeMissingValues(t *testing.T) {
 	for _, s := range result {
 		assert.NotEqual(t, "NaN", s)
 	}
-	assert.Equal(t, "0.80", result[0*internal.NumSectionFields])
-	assert.Equal(t, "1.60", result[1*internal.NumSectionFields])
-	assert.Equal(t, "2.40", result[2*internal.NumSectionFields])
-	assert.Equal(t, "3.20", result[3*internal.NumSectionFields])
-	assert.Equal(t, "10.00", result[10*internal.NumSectionFields])
-	assert.Equal(t, "11.00", result[11*internal.NumSectionFields])
-	assert.Equal(t, "50.00", result[50*internal.NumSectionFields])
-	assert.Equal(t, "47.00", result[95*internal.NumSectionFields])
+
+	assert.Equal(t, "0.80", result[0*internal.NumSectionFields+1])
+	assert.Equal(t, "1.60", result[1*internal.NumSectionFields+1])
+	assert.Equal(t, "2.40", result[2*internal.NumSectionFields+1])
+	assert.Equal(t, "3.20", result[3*internal.NumSectionFields+1])
+	assert.Equal(t, "10.00", result[10*internal.NumSectionFields+1])
+	assert.Equal(t, "11.00", result[11*internal.NumSectionFields+1])
+	assert.Equal(t, "50.00", result[50*internal.NumSectionFields+1])
+	assert.Equal(t, "47.00", result[95*internal.NumSectionFields+1])
 }

@@ -47,3 +47,52 @@ func TestReadInitialCenters(t *testing.T) {
 	_, err = readInitialCenter(reader)
 	assert.Error(t, err)
 }
+
+func TestPodMetricToRawData(t *testing.T) {
+	m := map[string]map[string][]*AppPodMetrics{
+		"test": {
+			"test": make([]*AppPodMetrics, 0),
+		},
+	}
+
+	arr := m["test"]["test"]
+	for i := 0; i < internal.NumSections; i++ {
+		sectionTimestamp := i * internal.SectionLength
+
+		for j := 0; j < 10; j++ {
+			arr = append(arr, &AppPodMetrics{
+				AppName: AppName{
+					Name:      "test",
+					Namespace: "test",
+				},
+				Timestamp: uint64(sectionTimestamp + j),
+				Cpu:       float32(j),
+				Mem:       float32(j),
+			})
+		}
+	}
+
+	m["test"]["test"] = arr
+	rawDataMap := podMetricsToRawData(m)
+	assert.Equal(t, 1, len(rawDataMap))
+
+	rawDataArray, ok := rawDataMap["test::test"]
+	assert.True(t, ok)
+	for _, data := range rawDataArray {
+		assert.Equal(t, float32(45), data.MemSum)
+		assert.Equal(t, float32(45), data.CpuSum)
+		assert.Equal(t, 10, len(data.Cpu))
+		assert.Equal(t, 10, len(data.Cpu))
+	}
+}
+
+func TestFloatArrayToClassMetrics(t *testing.T) {
+	arr := make([]float32, internal.NumSections*internal.NumSectionFields)
+	for i := 0; i < len(arr); i++ {
+		arr[i] = float32(i)
+	}
+	metrics := floatArrayToClassMetrics(1, arr)
+	assert.Equal(t, uint(1), metrics.ClassId)
+	assert.Equal(t, internal.NumSections, len(metrics.Data))
+	assert.Equal(t, float32(1), metrics.Data[0].CpuMax)
+}

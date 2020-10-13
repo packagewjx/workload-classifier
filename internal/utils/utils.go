@@ -5,6 +5,7 @@ import (
 	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/pkg/errors"
 	"math"
+	"reflect"
 	"strconv"
 )
 
@@ -82,31 +83,32 @@ func RecordToContainerWorkloadData(record []string) (*internal.ContainerWorkload
 func RecordsToSectionArray(record []string) ([]*internal.SectionData, error) {
 	arr := make([]*internal.SectionData, internal.NumSections)
 	for s := 0; s < internal.NumSections; s++ {
-		floatArr := make([]float32, internal.NumSectionFields)
-		for fi := 0; fi < len(floatArr); fi++ {
+		data := &internal.SectionData{}
+		val := reflect.ValueOf(data).Elem()
+		for fi := 0; fi < internal.NumSectionFields; fi++ {
 			f, err := strconv.ParseFloat(record[s*internal.NumSectionFields+fi], 32)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("第%d个数据有问题，数据为：%s",
 					s*internal.NumSectionFields+fi, record[s*internal.NumSectionFields+fi]))
 			}
-			floatArr[fi] = float32(f)
+			val.Field(fi).SetFloat(f)
 		}
 
-		arr[s] = &internal.SectionData{
-			CpuAvg: floatArr[0],
-			CpuMax: floatArr[1],
-			CpuMin: floatArr[2],
-			CpuP50: floatArr[3],
-			CpuP90: floatArr[4],
-			CpuP99: floatArr[5],
-			MemAvg: floatArr[6],
-			MemMax: floatArr[7],
-			MemMin: floatArr[8],
-			MemP50: floatArr[9],
-			MemP90: floatArr[10],
-			MemP99: floatArr[11],
-		}
+		arr[s] = data
 	}
 
 	return arr, nil
+}
+
+func WorkloadDataToStringRecord(data *internal.ContainerWorkloadData) []string {
+	record := make([]string, 1+len(data.Data)*internal.NumSectionFields)
+	record[0] = data.ContainerId
+	for i, datum := range data.Data {
+		val := reflect.ValueOf(datum).Elem()
+		for j := 0; j < internal.NumSectionFields; j++ {
+			record[1+i*internal.NumSectionFields+j] = strconv.FormatFloat(val.Field(j).Float(), 'f', 2, 32)
+		}
+	}
+
+	return record
 }

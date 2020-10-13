@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -79,4 +80,36 @@ func TestWorkloadToContainerData(t *testing.T) {
 	record[internal.NumSections] = ""
 	_, err = RecordsToSectionArray(record)
 	assert.Error(t, err)
+}
+
+func TestWorkloadDataToStringRecord(t *testing.T) {
+	data := &internal.ContainerWorkloadData{
+		ContainerId: "test",
+		Data:        make([]*internal.SectionData, internal.NumSections),
+	}
+
+	for i := 0; i < len(data.Data); i++ {
+		data.Data[i] = &internal.SectionData{
+			CpuAvg: float32(i * internal.NumSectionFields),
+			CpuMax: float32(i*internal.NumSectionFields + 1),
+			CpuMin: float32(i*internal.NumSectionFields + 2),
+			CpuP50: float32(i*internal.NumSectionFields + 3),
+			CpuP90: float32(i*internal.NumSectionFields + 4),
+			CpuP99: float32(i*internal.NumSectionFields + 5),
+			MemAvg: float32(i*internal.NumSectionFields + 6),
+			MemMax: float32(i*internal.NumSectionFields + 7),
+			MemMin: float32(i*internal.NumSectionFields + 8),
+			MemP50: float32(i*internal.NumSectionFields + 9),
+			MemP90: float32(i*internal.NumSectionFields + 10),
+			MemP99: float32(i*internal.NumSectionFields + 11),
+		}
+	}
+
+	record := WorkloadDataToStringRecord(data)
+	assert.Equal(t, "test", record[0])
+	for i := 1; i < len(record); i++ {
+		expect := fmt.Sprintf("%.2f", float32(i-1))
+		assert.Equal(t, expect, record[i])
+	}
+
 }

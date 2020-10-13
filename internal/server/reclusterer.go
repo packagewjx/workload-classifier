@@ -5,12 +5,18 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/packagewjx/workload-classifier/internal/classify"
 	"github.com/packagewjx/workload-classifier/internal/utils"
 	"github.com/pkg/errors"
 	"io"
 	"os"
+	"reflect"
+	"strings"
 	"time"
 )
+
+const NamespaceSplit = "::"
 
 func (s *serverImpl) reClusterer(ctx context.Context) {
 	s.logger.Println("再聚类线程启动")
@@ -48,17 +54,25 @@ func (s *serverImpl) reClusterer(ctx context.Context) {
 	now := time.Now()
 	now.Add(24 * time.Hour)
 	now.Date()
-	next := time.Date(now.Year(), now.Month(), now.Day(), int(s.config.ReClusterTime.Hours()), 0, 0, 0, now.Location())
+	next := time.Date(now.Year(), now.Month(), now.Day()+1, int(s.config.ReClusterTime.Hours()), 0, 0, 0, now.Location())
 	waitTime := next.Sub(now)
 
-	select {
-	case <-ctx.Done():
-		s.logger.Println("再聚类线程退出")
-		return
-	case <-time.After(waitTime):
-
-		waitTime = time.Hour * 24
+	for {
+		next = time.Now().Add(waitTime)
+		s.logger.Printf("聚类将于%s执行\n", next.Format("2006-01-02T15:04:05-0700"))
+		select {
+		case <-ctx.Done():
+			s.logger.Println("再聚类线程退出")
+			return
+		case <-time.After(waitTime):
+			waitTime = time.Hour * 24
+			err := s.reCluster()
+			if err != nil {
+				panic(errors.Wrap(err, "再聚类出错"))
+			}
+		}
 	}
+
 }
 
 func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
@@ -93,5 +107,109 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 }
 
 func (s *serverImpl) reCluster() error {
+	metrics, err := s.dao.QueryAllAppPodMetrics()
+	if err != nil {
+		return errors.Wrap(err, "再聚类时，查询监控数据出错")
+	}
+
+	workloadFloatMap := preprocessData(metrics)
+
+	alg := classify.GetAlgorithm(classify.KMeans)
+	ctx := classify.KMeansContext{
+		Round: int(s.config.NumRound),
+	}
+
+	// 保存每个位置的ID
+	dataArray := make([][]float32, 0, len(workloadFloatMap))
+	idArray := make([]string, 0, len(workloadFloatMap))
+	for containerId, arr := range workloadFloatMap {
+		idArray = append(idArray, containerId)
+		dataArray = append(dataArray, arr)
+	}
+
+	centers, class := alg.Run(dataArray, int(s.config.NumClass), ctx)
+
+	for i, center := range centers {
+		c := floatArrayToClassMetrics(i, center)
+		err := s.dao.SaveClassMetrics(c)
+		if err != nil {
+			return errors.Wrap(err, "保存ClassMetrics时出现错误")
+		}
+	}
+
+	for idx, id := range idArray {
+		split := strings.Split(id, NamespaceSplit)
+		a := &AppClass{
+			AppName: AppName{
+				Name:      split[1],
+				Namespace: split[0],
+			},
+			ClassId: uint(class[idx]),
+		}
+		err := s.dao.SaveAppClass(a)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("保存名称空间%s，名称为%s的应用的ClassID出现问题",
+				a.AppName.Namespace, a.AppName.Name))
+		}
+	}
+
 	return nil
+}
+
+func podMetricsToRawData(podMetricsMap map[string]map[string][]*AppPodMetrics) map[string][]*internal.RawSectionData {
+	m := make(map[string][]*internal.RawSectionData)
+
+	for namespace, namespaceMap := range podMetricsMap {
+		for appName, metrics := range namespaceMap {
+			containerId := namespace + NamespaceSplit + appName
+			arr := make([]*internal.RawSectionData, internal.NumSections)
+			for i := 0; i < len(arr); i++ {
+				arr[i] = &internal.RawSectionData{
+					Cpu:    make([]float32, 0),
+					Mem:    make([]float32, 0),
+					CpuSum: 0,
+					MemSum: 0,
+				}
+			}
+			for _, metric := range metrics {
+				section := arr[metric.Timestamp%internal.DayLength/internal.SectionLength]
+				section.Cpu = append(section.Cpu, metric.Mem)
+				section.Mem = append(section.Mem, metric.Mem)
+				section.CpuSum += metric.Cpu
+				section.MemSum += metric.Mem
+			}
+			m[containerId] = arr
+		}
+	}
+
+	return m
+}
+
+func preprocessData(podMetricsMap map[string]map[string][]*AppPodMetrics) map[string][]float32 {
+	rawDataMap := podMetricsToRawData(podMetricsMap)
+	workloadData := alitrace.ProcessRawData(rawDataMap)
+
+	for _, datum := range workloadData {
+		alitrace.ImputeWorkloadData(datum)
+		alitrace.NormalizeWorkloadData(datum)
+	}
+
+	return classify.ContainerWorkloadToFloatArray(workloadData)
+}
+
+func floatArrayToClassMetrics(id int, data []float32) *ClassMetrics {
+	result := &ClassMetrics{
+		ClassId: uint(id),
+		Data:    make([]*internal.SectionData, internal.NumSections),
+	}
+
+	for i := 0; i < len(result.Data); i++ {
+		result.Data[i] = &internal.SectionData{}
+		val := reflect.ValueOf(result.Data[i]).Elem()
+		for j := 0; j < internal.NumSectionFields; j++ {
+			val.Field(j).SetFloat(float64(data[i*internal.NumSectionFields+j]))
+		}
+	}
+
+	return result
 }

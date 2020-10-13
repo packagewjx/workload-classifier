@@ -13,7 +13,8 @@ import (
 	"sync"
 )
 
-func normalizeSectionData(data []*internal.SectionData) {
+func NormalizeWorkloadData(workload *internal.ContainerWorkloadData) {
+	data := workload.Data
 	typ := reflect.TypeOf(internal.SectionData{})
 	dataVal := make([]reflect.Value, len(data))
 	for i, datum := range data {
@@ -81,7 +82,7 @@ func NormalizeSection(in io.Reader, out io.Writer) error {
 				errCh <- errors.Wrap(err, fmt.Sprintf("解析第%d行数据失败", idx))
 				return
 			}
-			normalizeSectionData(cData.Data)
+			NormalizeWorkloadData(cData)
 			cDataArray[idx] = cData
 		}(i, record)
 	}

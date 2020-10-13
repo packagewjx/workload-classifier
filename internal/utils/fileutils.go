@@ -36,23 +36,7 @@ func WriteContainerWorkloadData(out io.Writer, data []*internal.ContainerWorkloa
 	defer writer.Flush()
 
 	for i, cData := range data {
-		record := make([]string, 1, 1+internal.NumSections*internal.NumSectionFields)
-		record[0] = cData.ContainerId
-		for i := 0; i < len(cData.Data); i++ {
-			stat := cData.Data[i]
-			record = append(record, fmt.Sprintf("%.2f", stat.CpuAvg))
-			record = append(record, fmt.Sprintf("%.2f", stat.CpuMax))
-			record = append(record, fmt.Sprintf("%.2f", stat.CpuMin))
-			record = append(record, fmt.Sprintf("%.2f", stat.CpuP50))
-			record = append(record, fmt.Sprintf("%.2f", stat.CpuP90))
-			record = append(record, fmt.Sprintf("%.2f", stat.CpuP99))
-			record = append(record, fmt.Sprintf("%.2f", stat.MemAvg))
-			record = append(record, fmt.Sprintf("%.2f", stat.MemMax))
-			record = append(record, fmt.Sprintf("%.2f", stat.MemMin))
-			record = append(record, fmt.Sprintf("%.2f", stat.MemP50))
-			record = append(record, fmt.Sprintf("%.2f", stat.MemP90))
-			record = append(record, fmt.Sprintf("%.2f", stat.MemP99))
-		}
+		record := WorkloadDataToStringRecord(cData)
 		err := writer.Write(record)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("写入第%d条数据出错", i))

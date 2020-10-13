@@ -33,3 +33,10 @@ type ContainerWorkloadData struct {
 const LineBreak = '\n'
 
 const Splitter = ","
+
+type RawSectionData struct {
+	Cpu    []float32
+	Mem    []float32
+	CpuSum float32 // Cpu的总和。用于计算平均值
+	MemSum float32 // Mem的总和。用于计算平均值
+}

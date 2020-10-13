@@ -32,24 +32,17 @@ type containerWorkloadReader struct {
 	ReadCount uint64
 }
 
-type rawSectionData struct {
-	cpu    []float32
-	mem    []float32
-	cpuSum float32
-	memSum float32
-}
-
 func (u *containerWorkloadReader) Read() ([]*internal.ContainerWorkloadData, error) {
 	rawData, err := u.readRawData()
 	if err != nil {
 		return nil, err
 	}
 
-	return u.processRawData(rawData), nil
+	return ProcessRawData(rawData), nil
 }
 
-func (u *containerWorkloadReader) readRawData() (map[string][]*rawSectionData, error) {
-	containerSection := make(map[string][]*rawSectionData)
+func (u *containerWorkloadReader) readRawData() (map[string][]*internal.RawSectionData, error) {
+	containerSection := make(map[string][]*internal.RawSectionData)
 
 	// 读取输入
 	var line string
@@ -93,11 +86,11 @@ func (u *containerWorkloadReader) readRawData() (map[string][]*rawSectionData, e
 		memUtil, _ := strconv.ParseFloat(record[4], 32)
 		sections, ok := containerSection[cid]
 		if !ok {
-			sections = make([]*rawSectionData, internal.NumSections)
+			sections = make([]*internal.RawSectionData, internal.NumSections)
 			for i := 0; i < len(sections); i++ {
-				sections[i] = &rawSectionData{
-					cpu: make([]float32, 0, 128),
-					mem: make([]float32, 0, 128),
+				sections[i] = &internal.RawSectionData{
+					Cpu: make([]float32, 0, 128),
+					Mem: make([]float32, 0, 128),
 				}
 			}
 			containerSection[cid] = sections
@@ -107,22 +100,22 @@ func (u *containerWorkloadReader) readRawData() (map[string][]*rawSectionData, e
 		mem := memUtil
 
 		sect := sections[sectionIndex]
-		sect.cpu = append(sect.cpu, float32(cpu))
-		sect.mem = append(sect.mem, float32(mem))
-		sect.cpuSum += float32(cpu)
-		sect.memSum += float32(mem)
+		sect.Cpu = append(sect.Cpu, float32(cpu))
+		sect.Mem = append(sect.Mem, float32(mem))
+		sect.CpuSum += float32(cpu)
+		sect.MemSum += float32(mem)
 	}
 	return containerSection, nil
 }
 
-func (u *containerWorkloadReader) processRawData(containerSection map[string][]*rawSectionData) []*internal.ContainerWorkloadData {
+func ProcessRawData(containerSection map[string][]*internal.RawSectionData) []*internal.ContainerWorkloadData {
 	// 处理数据
 	cDataArray := make([]*internal.ContainerWorkloadData, len(containerSection))
 	idx := 0
 	wg := sync.WaitGroup{}
 	for cid, sections := range containerSection {
 		wg.Add(1)
-		go func(i int, containerId string, rawData []*rawSectionData) {
+		go func(i int, containerId string, rawData []*internal.RawSectionData) {
 			defer wg.Done()
 			cData := &internal.ContainerWorkloadData{
 				ContainerId: cid,
@@ -131,13 +124,13 @@ func (u *containerWorkloadReader) processRawData(containerSection map[string][]*
 
 			for si, section := range rawData {
 				stat := &internal.SectionData{}
-				if len(section.cpu) != 0 {
-					stat.CpuAvg = section.cpuSum / float32(len(section.cpu))
-					stat.CpuMax = utils.GetSortedPositionValue(section.cpu, len(section.cpu)-1)
-					stat.CpuMin = utils.GetSortedPositionValue(section.cpu, 0)
-					stat.CpuP50 = utils.GetSortedPositionValue(section.cpu, len(section.cpu)/2)
-					stat.CpuP90 = utils.GetSortedPositionValue(section.cpu, len(section.cpu)*90/100)
-					stat.CpuP99 = utils.GetSortedPositionValue(section.cpu, len(section.cpu)*99/100)
+				if len(section.Cpu) != 0 {
+					stat.CpuAvg = section.CpuSum / float32(len(section.Cpu))
+					stat.CpuMax = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)-1)
+					stat.CpuMin = utils.GetSortedPositionValue(section.Cpu, 0)
+					stat.CpuP50 = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)/2)
+					stat.CpuP90 = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)*90/100)
+					stat.CpuP99 = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)*99/100)
 				} else {
 					stat.CpuAvg = float32(math.NaN())
 					stat.CpuMax = float32(math.NaN())
@@ -146,13 +139,13 @@ func (u *containerWorkloadReader) processRawData(containerSection map[string][]*
 					stat.CpuP90 = float32(math.NaN())
 					stat.CpuP99 = float32(math.NaN())
 				}
-				if len(section.mem) != 0 {
-					stat.MemAvg = section.memSum / float32(len(section.mem))
-					stat.MemMax = utils.GetSortedPositionValue(section.mem, len(section.mem)-1)
-					stat.MemMin = utils.GetSortedPositionValue(section.mem, 0)
-					stat.MemP50 = utils.GetSortedPositionValue(section.mem, len(section.mem)/2)
-					stat.MemP90 = utils.GetSortedPositionValue(section.mem, len(section.mem)*90/100)
-					stat.MemP99 = utils.GetSortedPositionValue(section.mem, len(section.mem)*99/100)
+				if len(section.Mem) != 0 {
+					stat.MemAvg = section.MemSum / float32(len(section.Mem))
+					stat.MemMax = utils.GetSortedPositionValue(section.Mem, len(section.Mem)-1)
+					stat.MemMin = utils.GetSortedPositionValue(section.Mem, 0)
+					stat.MemP50 = utils.GetSortedPositionValue(section.Mem, len(section.Mem)/2)
+					stat.MemP90 = utils.GetSortedPositionValue(section.Mem, len(section.Mem)*90/100)
+					stat.MemP99 = utils.GetSortedPositionValue(section.Mem, len(section.Mem)*99/100)
 				} else {
 					stat.MemAvg = float32(math.NaN())
 					stat.MemMax = float32(math.NaN())
