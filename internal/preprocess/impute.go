@@ -78,6 +78,7 @@ func ImputeMissingValues(in io.Reader, out io.Writer) error {
 		if strings.Contains(line, "NaN") {
 			log.Printf("第%d行记录有NaN值，正在插值\n", lineCount)
 
+			line = strings.TrimSpace(line)
 			data, err := utils.RecordToContainerWorkloadData(strings.Split(line, internal.Splitter))
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("第%d行数据错误", lineCount))

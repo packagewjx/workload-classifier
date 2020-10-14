@@ -32,6 +32,7 @@ type QueryDao interface {
 }
 
 type Dao interface {
+	DB() *gorm.DB
 	UpdateDao
 	QueryDao
 }
@@ -310,4 +311,8 @@ func (d *daoImpl) queryAppId(appName *AppName) (uint, error) {
 	d.appIdMap[key] = app.ID
 
 	return app.ID, nil
+}
+
+func (d *daoImpl) DB() *gorm.DB {
+	return d.db
 }

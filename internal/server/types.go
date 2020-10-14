@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/packagewjx/workload-classifier/internal"
+	"strings"
 )
 
 type AppPodMetrics struct {
@@ -24,4 +25,18 @@ type ClassMetrics struct {
 type AppName struct {
 	Name      string `gorm:"uniqueIndex:app;type:VARCHAR(256)"`
 	Namespace string `gorm:"uniqueIndex:app;type:VARCHAR(256)"`
+}
+
+func (name AppName) ContainerId() string {
+	return name.Namespace + NamespaceSplit + name.Name
+}
+
+const NamespaceSplit = "::"
+
+func AppNameFromContainerId(containerId string) AppName {
+	split := strings.Split(containerId, NamespaceSplit)
+	return AppName{
+		Name:      split[1],
+		Namespace: split[0],
+	}
 }

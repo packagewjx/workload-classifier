@@ -18,11 +18,11 @@ package cmd
 import (
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/packagewjx/workload-classifier/internal/datasource"
 	"github.com/packagewjx/workload-classifier/internal/utils"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -49,17 +49,13 @@ func (r readCounter) Read(p []byte) (n int, err error) {
 
 // convertCmd represents the convert command
 var convertCmd = &cobra.Command{
-	Use:   "convert containerMetaFile outputFile inputFile...",
+	Use:   "convert outputFile inputFile...",
 	Short: "将container_usage格式的文件转换为特征，并输出到文件中",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 3 {
+		if len(args) < 2 {
 			return fmt.Errorf("命令错误")
 		}
 		_, err := os.Stat(args[0])
-		if os.IsNotExist(err) {
-			return fmt.Errorf("元数据文件不存在")
-		}
-		_, err = os.Stat(args[1])
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("输出文件已存在")
 		}
@@ -67,25 +63,13 @@ var convertCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Println("读取元数据文件中")
-		metaFile, err := os.Open(args[0])
-		if err != nil {
-			return errors.Wrap(err, "打开元数据文件错误")
-		}
-		meta, err := alitrace.LoadContainerMeta(metaFile)
-		if err != nil {
-			return errors.Wrap(err, "读取元数据文件错误")
-		}
-		log.Println("读取元数据文件完毕")
-		_ = metaFile.Close()
-
 		readCount := uint64(0)
-		readCloser, totalByte, err := openFilesWithReadCounter(args[2:], &readCount)
+		readCloser, totalByte, err := openFilesWithReadCounter(args[1:], &readCount)
 		if len(readCloser) == 0 {
 			return errors.Wrap(err, "没有文件处理，退出")
 		}
 
-		fout, err := os.OpenFile(args[1], os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0666)
+		fout, err := os.OpenFile(args[0], os.O_WRONLY|os.O_EXCL|os.O_CREATE, 0666)
 		defer func() {
 			_ = fout.Close()
 		}()
@@ -107,11 +91,11 @@ var convertCmd = &cobra.Command{
 		}()
 
 		// 打开文件并设置readCounter
-		return merge(readCloser, fout, meta)
+		return merge(readCloser, fout)
 	},
 }
 
-func merge(readCloser []io.ReadCloser, fout io.Writer, meta map[string][]*alitrace.ContainerMeta) error {
+func merge(readCloser []io.ReadCloser, fout io.Writer) error {
 	if outputHeader {
 		err := utils.WriteContainerWorkloadHeader(fout)
 		if err != nil {
@@ -120,10 +104,12 @@ func merge(readCloser []io.ReadCloser, fout io.Writer, meta map[string][]*alitra
 	}
 
 	for _, rc := range readCloser {
-		workloadData, err := alitrace.NewContainerWorkloadReader(rc, meta).Read()
+		dataSource := alitrace.NewAlitraceDatasource(rc)
+		rawData, err := datasource.NewDataSourceRawDataReader(dataSource).Read()
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("读取%s文件出错", rc))
+			return errors.Wrap(err, "读取输入文件出错")
 		}
+		workloadData := datasource.ConvertAllRawData(rawData)
 		_ = rc.Close()
 
 		err = utils.WriteContainerWorkloadData(fout, workloadData)

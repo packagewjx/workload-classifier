@@ -13,11 +13,8 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 )
-
-const NamespaceSplit = "::"
 
 func (s *serverImpl) reClusterer(ctx context.Context) {
 	s.logger.Println("再聚类线程启动")
@@ -108,13 +105,20 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 }
 
 func (s *serverImpl) reCluster() error {
-	metrics, err := s.dao.QueryAllAppPodMetrics()
+	// 获取并转换数据
+	dataSource := NewDatabaseDatasource(s.dao.DB())
+	rawData, err := datasource.NewDataSourceRawDataReader(dataSource).Read()
 	if err != nil {
-		return errors.Wrap(err, "再聚类时，查询监控数据出错")
+		return errors.Wrap(err, "读取数据库监控出错")
 	}
+	workloadData := datasource.ConvertAllRawData(rawData)
+	preprocessor := preprocess.Default()
+	for _, datum := range workloadData {
+		preprocessor.Preprocess(datum)
+	}
+	workloadFloatMap := utils.ContainerWorkloadToFloatArray(workloadData)
 
-	workloadFloatMap := preprocessData(metrics)
-
+	// 获取算法实现
 	alg := classify.GetAlgorithm(classify.KMeans)
 	ctx := classify.KMeansContext{
 		Round: int(s.config.NumRound),
@@ -139,12 +143,8 @@ func (s *serverImpl) reCluster() error {
 	}
 
 	for idx, id := range idArray {
-		split := strings.Split(id, NamespaceSplit)
 		a := &AppClass{
-			AppName: AppName{
-				Name:      split[1],
-				Namespace: split[0],
-			},
+			AppName: AppNameFromContainerId(id),
 			ClassId: uint(class[idx]),
 		}
 		err := s.dao.SaveAppClass(a)
@@ -155,50 +155,6 @@ func (s *serverImpl) reCluster() error {
 	}
 
 	return nil
-}
-
-func podMetricsToRawData(podMetricsMap map[string]map[string][]*AppPodMetrics) []*internal.ContainerRawData {
-	m := make([]*internal.ContainerRawData, 0)
-
-	for namespace, namespaceMap := range podMetricsMap {
-		for appName, metrics := range namespaceMap {
-			containerId := namespace + NamespaceSplit + appName
-			arr := make([]*internal.RawSectionData, internal.NumSections)
-			for i := 0; i < len(arr); i++ {
-				arr[i] = &internal.RawSectionData{
-					Cpu:    make([]float32, 0),
-					Mem:    make([]float32, 0),
-					CpuSum: 0,
-					MemSum: 0,
-				}
-			}
-			for _, metric := range metrics {
-				section := arr[metric.Timestamp%internal.DayLength/internal.SectionLength]
-				section.Cpu = append(section.Cpu, metric.Mem)
-				section.Mem = append(section.Mem, metric.Mem)
-				section.CpuSum += metric.Cpu
-				section.MemSum += metric.Mem
-			}
-			m = append(m, &internal.ContainerRawData{
-				ContainerId: containerId,
-				Data:        arr,
-			})
-		}
-	}
-
-	return m
-}
-
-func preprocessData(podMetricsMap map[string]map[string][]*AppPodMetrics) map[string][]float32 {
-	rawData := podMetricsToRawData(podMetricsMap)
-	workloadData := datasource.ConvertAllRawData(rawData)
-	preprocessor := preprocess.Default()
-
-	for _, datum := range workloadData {
-		preprocessor.Preprocess(datum)
-	}
-
-	return classify.ContainerWorkloadToFloatArray(workloadData)
 }
 
 func floatArrayToClassMetrics(id int, data []float32) *ClassMetrics {
