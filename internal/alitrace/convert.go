@@ -3,14 +3,12 @@ package alitrace
 import (
 	"bufio"
 	"github.com/packagewjx/workload-classifier/internal"
-	"github.com/packagewjx/workload-classifier/internal/utils"
+	"github.com/packagewjx/workload-classifier/internal/datasource"
 	"io"
 	"log"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 const StatusStarted = "started"
@@ -38,10 +36,10 @@ func (u *containerWorkloadReader) Read() ([]*internal.ContainerWorkloadData, err
 		return nil, err
 	}
 
-	return ProcessRawData(rawData), nil
+	return datasource.ConvertAllRawData(rawData), nil
 }
 
-func (u *containerWorkloadReader) readRawData() (map[string][]*internal.RawSectionData, error) {
+func (u *containerWorkloadReader) readRawData() ([]*internal.ContainerRawData, error) {
 	containerSection := make(map[string][]*internal.RawSectionData)
 
 	// 读取输入
@@ -105,61 +103,14 @@ func (u *containerWorkloadReader) readRawData() (map[string][]*internal.RawSecti
 		sect.CpuSum += float32(cpu)
 		sect.MemSum += float32(mem)
 	}
-	return containerSection, nil
-}
 
-func ProcessRawData(containerSection map[string][]*internal.RawSectionData) []*internal.ContainerWorkloadData {
-	// 处理数据
-	cDataArray := make([]*internal.ContainerWorkloadData, len(containerSection))
-	idx := 0
-	wg := sync.WaitGroup{}
-	for cid, sections := range containerSection {
-		wg.Add(1)
-		go func(i int, containerId string, rawData []*internal.RawSectionData) {
-			defer wg.Done()
-			cData := &internal.ContainerWorkloadData{
-				ContainerId: cid,
-				Data:        make([]*internal.SectionData, len(rawData)),
-			}
-
-			for si, section := range rawData {
-				stat := &internal.SectionData{}
-				if len(section.Cpu) != 0 {
-					stat.CpuAvg = section.CpuSum / float32(len(section.Cpu))
-					stat.CpuMax = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)-1)
-					stat.CpuMin = utils.GetSortedPositionValue(section.Cpu, 0)
-					stat.CpuP50 = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)/2)
-					stat.CpuP90 = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)*90/100)
-					stat.CpuP99 = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)*99/100)
-				} else {
-					stat.CpuAvg = float32(math.NaN())
-					stat.CpuMax = float32(math.NaN())
-					stat.CpuMin = float32(math.NaN())
-					stat.CpuP50 = float32(math.NaN())
-					stat.CpuP90 = float32(math.NaN())
-					stat.CpuP99 = float32(math.NaN())
-				}
-				if len(section.Mem) != 0 {
-					stat.MemAvg = section.MemSum / float32(len(section.Mem))
-					stat.MemMax = utils.GetSortedPositionValue(section.Mem, len(section.Mem)-1)
-					stat.MemMin = utils.GetSortedPositionValue(section.Mem, 0)
-					stat.MemP50 = utils.GetSortedPositionValue(section.Mem, len(section.Mem)/2)
-					stat.MemP90 = utils.GetSortedPositionValue(section.Mem, len(section.Mem)*90/100)
-					stat.MemP99 = utils.GetSortedPositionValue(section.Mem, len(section.Mem)*99/100)
-				} else {
-					stat.MemAvg = float32(math.NaN())
-					stat.MemMax = float32(math.NaN())
-					stat.MemMin = float32(math.NaN())
-					stat.MemP50 = float32(math.NaN())
-					stat.MemP90 = float32(math.NaN())
-					stat.MemP99 = float32(math.NaN())
-				}
-				cData.Data[si] = stat
-			}
-			cDataArray[i] = cData
-		}(idx, cid, sections)
-		idx++
+	result := make([]*internal.ContainerRawData, 0, len(containerSection))
+	for id, data := range containerSection {
+		result = append(result, &internal.ContainerRawData{
+			ContainerId: id,
+			Data:        data,
+		})
 	}
-	wg.Wait()
-	return cDataArray
+
+	return result, nil
 }

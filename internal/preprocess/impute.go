@@ -1,4 +1,4 @@
-package alitrace
+package preprocess
 
 import (
 	"bufio"
@@ -13,7 +13,14 @@ import (
 	"strings"
 )
 
-func ImputeWorkloadData(workload *internal.ContainerWorkloadData) {
+func Impute() Preprocessor {
+	return &imputePreProcessor{}
+}
+
+type imputePreProcessor struct {
+}
+
+func (i imputePreProcessor) Preprocess(workload *internal.ContainerWorkloadData) {
 	for fi := 0; fi < internal.NumSectionFields; fi++ {
 		invalidLeft := -1
 		for si := 0; si < len(workload.Data); si++ {
@@ -65,6 +72,7 @@ func ImputeMissingValues(in io.Reader, out io.Writer) error {
 	var line string
 	var err error
 	lineCount := 0
+	impute := Impute()
 	for line, err = reader.ReadString(internal.LineBreak); err == nil || (line != "" && err == io.EOF); line, err = reader.ReadString(internal.LineBreak) {
 		lineCount++
 		if strings.Contains(line, "NaN") {
@@ -74,7 +82,7 @@ func ImputeMissingValues(in io.Reader, out io.Writer) error {
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("第%d行数据错误", lineCount))
 			}
-			ImputeWorkloadData(data)
+			impute.Preprocess(data)
 
 			record := utils.WorkloadDataToStringRecord(data)
 			line = strings.Join(record, internal.Splitter) + string(internal.LineBreak)

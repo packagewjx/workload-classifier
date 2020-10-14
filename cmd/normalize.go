@@ -17,7 +17,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/packagewjx/workload-classifier/internal/preprocess"
 	"github.com/pkg/errors"
 	"os"
 
@@ -47,7 +47,7 @@ var normalizeCmd = &cobra.Command{
 			_ = out.Close()
 		}()
 
-		return alitrace.NormalizeSection(in, out)
+		return preprocess.NormalizeSection(in, out)
 	},
 }
 

@@ -1,4 +1,4 @@
-package alitrace
+package preprocess
 
 import (
 	"encoding/csv"
@@ -13,7 +13,14 @@ import (
 	"sync"
 )
 
-func NormalizeWorkloadData(workload *internal.ContainerWorkloadData) {
+func Normalize() Preprocessor {
+	return &normalize{}
+}
+
+type normalize struct {
+}
+
+func (n normalize) Preprocess(workload *internal.ContainerWorkloadData) {
 	data := workload.Data
 	typ := reflect.TypeOf(internal.SectionData{})
 	dataVal := make([]reflect.Value, len(data))
@@ -50,8 +57,6 @@ func NormalizeWorkloadData(workload *internal.ContainerWorkloadData) {
 			field.SetFloat(field.Float() / float64(max))
 		}
 	}
-
-	return
 }
 
 func NormalizeSection(in io.Reader, out io.Writer) error {
@@ -67,6 +72,7 @@ func NormalizeSection(in io.Reader, out io.Writer) error {
 	wg := sync.WaitGroup{}
 	errCh := make(chan error)
 	doneCh := make(chan struct{})
+	normalize := Normalize()
 
 	for i, record := range records {
 		if len(record) < internal.NumSectionFields*internal.NumSections {
@@ -82,7 +88,7 @@ func NormalizeSection(in io.Reader, out io.Writer) error {
 				errCh <- errors.Wrap(err, fmt.Sprintf("解析第%d行数据失败", idx))
 				return
 			}
-			NormalizeWorkloadData(cData)
+			normalize.Preprocess(cData)
 			cDataArray[idx] = cData
 		}(i, record)
 	}

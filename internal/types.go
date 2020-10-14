@@ -40,3 +40,8 @@ type RawSectionData struct {
 	CpuSum float32 // Cpu的总和。用于计算平均值
 	MemSum float32 // Mem的总和。用于计算平均值
 }
+
+type ContainerRawData struct {
+	ContainerId string
+	Data        []*RawSectionData
+}

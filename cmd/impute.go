@@ -16,7 +16,7 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/packagewjx/workload-classifier/internal/preprocess"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"os"
@@ -46,7 +46,7 @@ var imputeCmd = &cobra.Command{
 			return errors.Wrap(err, "创建输出文件错误")
 		}
 
-		return alitrace.ImputeMissingValues(fin, fout)
+		return preprocess.ImputeMissingValues(fin, fout)
 	},
 }
 

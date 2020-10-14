@@ -73,12 +73,11 @@ func TestPodMetricToRawData(t *testing.T) {
 	}
 
 	m["test"]["test"] = arr
-	rawDataMap := podMetricsToRawData(m)
-	assert.Equal(t, 1, len(rawDataMap))
+	rawData := podMetricsToRawData(m)
+	assert.Equal(t, 1, len(rawData))
 
-	rawDataArray, ok := rawDataMap["test::test"]
-	assert.True(t, ok)
-	for _, data := range rawDataArray {
+	testData := rawData[0]
+	for _, data := range testData.Data {
 		assert.Equal(t, float32(45), data.MemSum)
 		assert.Equal(t, float32(45), data.CpuSum)
 		assert.Equal(t, 10, len(data.Cpu))

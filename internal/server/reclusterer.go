@@ -5,8 +5,9 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
-	"github.com/packagewjx/workload-classifier/internal/alitrace"
 	"github.com/packagewjx/workload-classifier/internal/classify"
+	"github.com/packagewjx/workload-classifier/internal/datasource"
+	"github.com/packagewjx/workload-classifier/internal/preprocess"
 	"github.com/packagewjx/workload-classifier/internal/utils"
 	"github.com/pkg/errors"
 	"io"
@@ -156,8 +157,8 @@ func (s *serverImpl) reCluster() error {
 	return nil
 }
 
-func podMetricsToRawData(podMetricsMap map[string]map[string][]*AppPodMetrics) map[string][]*internal.RawSectionData {
-	m := make(map[string][]*internal.RawSectionData)
+func podMetricsToRawData(podMetricsMap map[string]map[string][]*AppPodMetrics) []*internal.ContainerRawData {
+	m := make([]*internal.ContainerRawData, 0)
 
 	for namespace, namespaceMap := range podMetricsMap {
 		for appName, metrics := range namespaceMap {
@@ -178,7 +179,10 @@ func podMetricsToRawData(podMetricsMap map[string]map[string][]*AppPodMetrics) m
 				section.CpuSum += metric.Cpu
 				section.MemSum += metric.Mem
 			}
-			m[containerId] = arr
+			m = append(m, &internal.ContainerRawData{
+				ContainerId: containerId,
+				Data:        arr,
+			})
 		}
 	}
 
@@ -186,12 +190,12 @@ func podMetricsToRawData(podMetricsMap map[string]map[string][]*AppPodMetrics) m
 }
 
 func preprocessData(podMetricsMap map[string]map[string][]*AppPodMetrics) map[string][]float32 {
-	rawDataMap := podMetricsToRawData(podMetricsMap)
-	workloadData := alitrace.ProcessRawData(rawDataMap)
+	rawData := podMetricsToRawData(podMetricsMap)
+	workloadData := datasource.ConvertAllRawData(rawData)
+	preprocessor := preprocess.Default()
 
 	for _, datum := range workloadData {
-		alitrace.ImputeWorkloadData(datum)
-		alitrace.NormalizeWorkloadData(datum)
+		preprocessor.Preprocess(datum)
 	}
 
 	return classify.ContainerWorkloadToFloatArray(workloadData)
