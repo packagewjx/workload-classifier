@@ -2,10 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 	"time"
 )
@@ -60,16 +64,18 @@ func NewServer(ctx *ServerConfig) (Server, error) {
 	}
 
 	return &serverImpl{
-		config: ctx,
-		dao:    dao,
-		logger: log.New(os.Stdout, "workload server: ", log.LstdFlags|log.Lshortfile|log.Lmsgprefix),
+		config:           ctx,
+		dao:              dao,
+		logger:           log.New(os.Stdout, "workload server: ", log.LstdFlags|log.Lshortfile|log.Lmsgprefix),
+		executeReCluster: make(chan struct{}),
 	}, nil
 }
 
 type serverImpl struct {
-	config *ServerConfig
-	dao    Dao
-	logger *log.Logger
+	config           *ServerConfig
+	dao              Dao
+	logger           *log.Logger
+	executeReCluster chan struct{}
 }
 
 func checkConfig(config *ServerConfig) error {
@@ -109,14 +115,93 @@ func (s *serverImpl) Start() error {
 
 	go s.reClusterer(reClustererContext)
 
+	server := s.buildServer()
+	errCh := make(chan error)
+	go s.serve(server, errCh)
+
 	// 注册信号接收器
 	termSigChan := make(chan os.Signal)
 	signal.Notify(termSigChan, syscall.SIGTERM, syscall.SIGINT)
 
 	select {
 	case <-termSigChan:
+		err := server.Shutdown(rootCtx)
+		if err != nil {
+			return errors.Wrap(err, "关闭HTTP服务器失败")
+		}
 		cancel()
 	}
 
+	// 等待HTTP服务器结束
+	err := <-errCh
+	if err != nil {
+		return errors.Wrap(err, "HTTP关闭出现错误")
+	}
+
 	return nil
+}
+
+func (s *serverImpl) buildServer() *http.Server {
+	mux := http.NewServeMux()
+	const NamePattern = "[\\d\\w]|(?:[\\d\\w][\\d\\w-.]{0,251}[\\d\\w])"
+	mux.HandleFunc("/namespaces/", func(writer http.ResponseWriter, request *http.Request) {
+		pattern := regexp.MustCompile(fmt.Sprintf("/namespaces/(%s)/appclass/(%s)", NamePattern, NamePattern))
+		if !pattern.MatchString(request.URL.Path) {
+			http.NotFound(writer, request)
+			return
+		}
+		subMatch := pattern.FindStringSubmatch(request.URL.Path)
+		namespace := subMatch[1]
+		name := subMatch[2]
+
+		class, err := s.QueryAppClass(AppName{
+			Name:      name,
+			Namespace: namespace,
+		})
+		if err == ErrAppNotFound {
+			http.NotFound(writer, request)
+			return
+		} else if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		marshal, err := json.Marshal(class)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json")
+		_, err = writer.Write(marshal)
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	mux.HandleFunc("/recluster", func(writer http.ResponseWriter, request *http.Request) {
+		s.ReCluster()
+		_, _ = writer.Write([]byte("OK"))
+	})
+
+	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte("OK"))
+	})
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", s.config.Port),
+		Handler: mux,
+	}
+	return srv
+}
+
+func (s *serverImpl) serve(server *http.Server, errCh chan<- error) {
+	s.logger.Printf("API服务器启动")
+
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		errCh <- err
+	}
+
+	s.logger.Printf("API服务器结束")
+	errCh <- nil
 }

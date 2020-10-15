@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
 	"strings"
 )
@@ -18,8 +19,8 @@ type AppClass struct {
 }
 
 type ClassMetrics struct {
-	ClassId uint
-	Data    []*internal.SectionData
+	ClassId uint                    `json:"classId"`
+	Data    []*internal.SectionData `json:"data"`
 }
 
 type AppName struct {
@@ -40,3 +41,5 @@ func AppNameFromContainerId(containerId string) AppName {
 		Namespace: split[0],
 	}
 }
+
+var ErrAppNotFound = fmt.Errorf("不存在本应用")

@@ -3,18 +3,18 @@ package internal
 import "reflect"
 
 type SectionData struct {
-	CpuAvg float32
-	CpuMax float32
-	CpuMin float32
-	CpuP50 float32
-	CpuP90 float32
-	CpuP99 float32
-	MemAvg float32
-	MemMax float32
-	MemMin float32
-	MemP50 float32
-	MemP90 float32
-	MemP99 float32
+	CpuAvg float32 `json:"cpuAvg"`
+	CpuMax float32 `json:"cpuMax"`
+	CpuMin float32 `json:"cpuMin"`
+	CpuP50 float32 `json:"cpuP50"`
+	CpuP90 float32 `json:"cpuP90"`
+	CpuP99 float32 `json:"cpuP99"`
+	MemAvg float32 `json:"memAvg"`
+	MemMax float32 `json:"memMax"`
+	MemMin float32 `json:"memMin"`
+	MemP50 float32 `json:"memP50"`
+	MemP90 float32 `json:"memP90"`
+	MemP99 float32 `json:"memP99"`
 }
 
 const SectionLength = 15 * 60

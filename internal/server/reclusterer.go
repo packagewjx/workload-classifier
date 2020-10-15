@@ -37,15 +37,13 @@ func (s *serverImpl) reClusterer(ctx context.Context) {
 		}
 
 		s.logger.Println("正在更新数据库的中心数据")
-		for _, center := range center {
+		for i, center := range center {
+			center.ClassId = uint(i + 1)
 			err := s.dao.SaveClassMetrics(center)
 			if err != nil {
-				panic(fmt.Sprintf("写入类数据失败，类数据为%v", center))
+				panic(fmt.Sprintf("写入类数据失败，类数据为%v，错误为：%v", center, err))
 			}
 		}
-
-		s.logger.Println("正在重新聚类")
-
 	}
 
 	// 将next设置为下一天的启动时间
@@ -64,6 +62,11 @@ func (s *serverImpl) reClusterer(ctx context.Context) {
 			return
 		case <-time.After(waitTime):
 			waitTime = time.Hour * 24
+			err := s.reCluster()
+			if err != nil {
+				panic(errors.Wrap(err, "再聚类出错"))
+			}
+		case <-s.executeReCluster:
 			err := s.reCluster()
 			if err != nil {
 				panic(errors.Wrap(err, "再聚类出错"))

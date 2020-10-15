@@ -107,7 +107,7 @@ func (d *daoImpl) SaveClassMetrics(c *ClassMetrics) error {
 }
 
 func (d *daoImpl) SaveAppClass(a *AppClass) error {
-	appId, err := d.queryAppId(&a.AppName)
+	appId, err := d.queryAppId(&a.AppName, true)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("查询名称为%s，命名空间为%s的AppID时出错", a.AppName, a.Namespace))
 	}
@@ -141,7 +141,7 @@ func (d *daoImpl) SaveAllAppPodMetrics(arr []*AppPodMetrics) error {
 	newDo := make([]*AppPodMetricsDO, 0, len(arr))
 	oldDo := make([]*AppPodMetricsDO, 0, len(arr))
 	for _, metrics := range arr {
-		id, err := d.queryAppId(&metrics.AppName)
+		id, err := d.queryAppId(&metrics.AppName, true)
 		if err != nil {
 			return err
 		}
@@ -228,7 +228,7 @@ func (d *daoImpl) QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error
 }
 
 func (d *daoImpl) QueryAppClassIdByApp(appName *AppName) (uint, error) {
-	appId, err := d.queryAppId(appName)
+	appId, err := d.queryAppId(appName, false)
 	if err != nil {
 		return 0, err
 	}
@@ -237,7 +237,9 @@ func (d *daoImpl) QueryAppClassIdByApp(appName *AppName) (uint, error) {
 	err = d.db.First(record, &AppClassDO{
 		AppId: appId,
 	}).Error
-	if err != nil {
+	if err == gorm.ErrRecordNotFound {
+		return 0, ErrAppNotFound
+	} else if err != nil {
 		return 0, errors.Wrap(err, "查询AppClass时出错")
 	}
 
@@ -324,23 +326,31 @@ func (d *daoImpl) QueryAllClassMetrics() ([]*ClassMetrics, error) {
 }
 
 // 根据AppName和namespace查询AppID，若不存在，则创建一条记录。
-func (d *daoImpl) queryAppId(appName *AppName) (uint, error) {
+func (d *daoImpl) queryAppId(appName *AppName, createIfNil bool) (uint, error) {
 	key := d.keyFunc(appName)
 	id, ok := d.appIdMap[key]
 	if ok {
 		return id, nil
 	}
 
-	d.logger.Printf("没有找到名称为%s，命名空间为%s的ID记录，将从数据库中获取", appName.Name, appName.Namespace)
+	d.logger.Printf("缓存中没有找到名称为%s，命名空间为%s的ID记录，将从数据库中获取\n", appName.Name, appName.Namespace)
 
 	app := &AppDo{}
-	err := d.db.FirstOrCreate(app, &AppDo{
-		Model: gorm.Model{},
+	err := d.db.FirstOrInit(app, &AppDo{
 		AppName: AppName{
 			Name:      appName.Name,
 			Namespace: appName.Namespace,
 		},
 	}).Error
+	if err == gorm.ErrRecordNotFound {
+		if !createIfNil {
+			d.logger.Printf("数据库中不存在名称为%s，命名空间为%s的ID记录\n", appName.Name, appName.Namespace)
+			return 0, ErrAppNotFound
+		}
+		d.logger.Printf("数据库中不存在名称为%s，命名空间为%s的ID记录，将创建\n", appName.Name, appName.Namespace)
+		err = d.db.Create(app).Error
+	}
+
 	if err != nil {
 		return 0, errors.Wrap(err, fmt.Sprintf("从数据库中查询或创建App记录出错。名称为%s，命名空间为%s", appName.Name, appName.Namespace))
 	}
