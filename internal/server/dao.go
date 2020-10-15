@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"log"
 	"os"
 )
@@ -27,6 +28,7 @@ type UpdateDao interface {
 
 type QueryDao interface {
 	QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error)
+	QueryAllClassMetrics() ([]*ClassMetrics, error)
 	QueryAppClassIdByApp(appName *AppName) (uint, error)
 	QueryAllAppPodMetrics() (map[string]map[string][]*AppPodMetrics, error)
 }
@@ -45,7 +47,11 @@ type daoImpl struct {
 }
 
 func NewDao() (Dao, error) {
-	db, err := gorm.Open(mysql.Open(databaseURL), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(databaseURL), &gorm.Config{
+		Logger: logger.New(log.New(os.Stdout, "", 0), logger.Config{
+			LogLevel: logger.Silent,
+		}),
+	})
 	if err != nil {
 		return nil, errors.Wrap(err, "连接数据库错误")
 	}
@@ -82,6 +88,10 @@ func NewDao() (Dao, error) {
 }
 
 func (d *daoImpl) SaveClassMetrics(c *ClassMetrics) error {
+	if c.ClassId == 0 {
+		return fmt.Errorf("ClassId不能为0")
+	}
+
 	doarr := make([]*ClassSectionMetricsDO, len(c.Data))
 	for i, datum := range c.Data {
 		doarr[i] = &ClassSectionMetricsDO{
@@ -283,6 +293,33 @@ func (d *daoImpl) QueryAllAppPodMetrics() (map[string]map[string][]*AppPodMetric
 		namespaceMap[appId.Name] = metricsArr
 	}
 
+	return result, nil
+}
+
+func (d *daoImpl) QueryAllClassMetrics() ([]*ClassMetrics, error) {
+	doArray := []*ClassSectionMetricsDO{}
+	err := d.db.Find(&doArray).Error
+	if err != nil {
+		return nil, errors.Wrap(err, "获取所有类数据出错")
+	}
+
+	m := map[uint]*ClassMetrics{}
+	for _, do := range doArray {
+		c, ok := m[do.ID]
+		if !ok {
+			c = &ClassMetrics{
+				ClassId: do.ID,
+				Data:    make([]*internal.SectionData, internal.NumSections),
+			}
+			m[do.ID] = c
+		}
+		c.Data[do.SectionNum] = &do.SectionData
+	}
+
+	result := make([]*ClassMetrics, 0, len(m))
+	for _, metrics := range m {
+		result = append(result, metrics)
+	}
 	return result, nil
 }
 

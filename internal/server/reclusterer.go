@@ -82,6 +82,7 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 		return nil, fmt.Errorf("没有读取到任何数据")
 	}
 
+	preprocessor := preprocess.Default()
 	for i, record := range records {
 		if len(record) != internal.NumSections*internal.NumSectionFields {
 			return nil, fmt.Errorf("第%d行数据有问题", i)
@@ -96,6 +97,13 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("第%d行数据有问题", i))
 		}
+		// 对array的数据进行预处理
+		temp := &internal.ContainerWorkloadData{
+			ContainerId: "",
+			Data:        array,
+		}
+		preprocessor.Preprocess(temp)
+
 		c.Data = array
 
 		result = append(result, c)
@@ -105,7 +113,10 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 }
 
 func (s *serverImpl) reCluster() error {
+	s.logger.Println("再聚类开始")
+
 	// 获取并转换数据
+	s.logger.Println("正在获取所有应用监控数据")
 	dataSource := NewDatabaseDatasource(s.dao.DB())
 	rawData, err := datasource.NewDataSourceRawDataReader(dataSource).Read()
 	if err != nil {
@@ -117,10 +128,11 @@ func (s *serverImpl) reCluster() error {
 		preprocessor.Preprocess(datum)
 	}
 	workloadFloatMap := utils.ContainerWorkloadToFloatArray(workloadData)
+	workloadData = nil
 
 	// 获取算法实现
 	alg := classify.GetAlgorithm(classify.KMeans)
-	ctx := classify.KMeansContext{
+	ctx := &classify.KMeansContext{
 		Round: int(s.config.NumRound),
 	}
 
@@ -131,21 +143,37 @@ func (s *serverImpl) reCluster() error {
 		idArray = append(idArray, containerId)
 		dataArray = append(dataArray, arr)
 	}
+	workloadFloatMap = nil
 
+	// 获取类别中心，并加入到dataArray中作为数据的一部分，避免中心变化太大
+	s.logger.Println("正在获取聚类中心数据，并加入到数据集中")
+	classMetrics, err := s.dao.QueryAllClassMetrics()
+	if err != nil {
+		return errors.Wrap(err, "查询类别中心时出错")
+	}
+	for _, metric := range classMetrics {
+		dataArray = append(dataArray, utils.SectionDataToFloatArray(metric.Data))
+	}
+
+	// 聚类执行
+	s.logger.Println("开始执行聚类")
 	centers, class := alg.Run(dataArray, int(s.config.NumClass), ctx)
+	s.logger.Println("聚类执行完成")
 
+	s.logger.Println("正在保存中心数据")
 	for i, center := range centers {
-		c := floatArrayToClassMetrics(i, center)
+		c := floatArrayToClassMetrics(i+1, center)
 		err := s.dao.SaveClassMetrics(c)
 		if err != nil {
 			return errors.Wrap(err, "保存ClassMetrics时出现错误")
 		}
 	}
 
-	for idx, id := range idArray {
+	s.logger.Println("保存新的应用与类别绑定关系")
+	for i := 0; i < len(idArray); i++ {
 		a := &AppClass{
-			AppName: AppNameFromContainerId(id),
-			ClassId: uint(class[idx]),
+			AppName: AppNameFromContainerId(idArray[i]),
+			ClassId: uint(class[i]),
 		}
 		err := s.dao.SaveAppClass(a)
 		if err != nil {
@@ -154,6 +182,7 @@ func (s *serverImpl) reCluster() error {
 		}
 	}
 
+	s.logger.Println("再聚类结束")
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"reflect"
 	"testing"
 )
 
@@ -430,4 +431,49 @@ func TestDaoImpl_RemoveAllClassMetrics(t *testing.T) {
 	arr = []*ClassSectionMetricsDO{}
 	db.Find(&arr)
 	assert.Equal(t, 0, len(arr))
+}
+
+func TestDaoImpl_QueryAllClassMetrics(t *testing.T) {
+	dao, _ := NewDao()
+	err := dao.DB().Delete(&ClassSectionMetricsDO{}, "1 = 1").Error
+	if err != nil {
+		assert.FailNow(t, "删除数据失败")
+	}
+
+	testData := make([]*ClassMetrics, DefaultNumClass)
+	for i := 0; i < len(testData); i++ {
+		testData[i] = &ClassMetrics{
+			ClassId: uint(i + 1), // ID不能为0
+			Data:    make([]*internal.SectionData, internal.NumSections),
+		}
+
+		for j := 0; j < len(testData[i].Data); j++ {
+			data := &internal.SectionData{}
+			val := reflect.ValueOf(data).Elem()
+			for k := 0; k < val.NumField(); k++ {
+				val.Field(k).SetFloat(float64(j))
+			}
+			testData[i].Data[j] = data
+		}
+
+		err := dao.SaveClassMetrics(testData[i])
+		if err != nil {
+			assert.FailNow(t, "保存数据失败")
+		}
+	}
+
+	metrics, err := dao.QueryAllClassMetrics()
+	assert.NoError(t, err)
+	assert.Equal(t, len(testData), len(metrics))
+	for _, metric := range metrics {
+		assert.Condition(t, func() (success bool) {
+			return metric.ClassId <= DefaultNumClass
+		})
+		for i, datum := range metric.Data {
+			val := reflect.ValueOf(datum).Elem()
+			for j := 0; j < val.NumField(); j++ {
+				assert.Equal(t, float64(i), val.Field(j).Float())
+			}
+		}
+	}
 }

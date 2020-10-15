@@ -1,8 +1,12 @@
 package server
 
 import (
+	"fmt"
 	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/internal/alitrace"
+	"github.com/packagewjx/workload-classifier/internal/preprocess"
 	"github.com/stretchr/testify/assert"
+	"log"
 	"math"
 	"os"
 	"reflect"
@@ -57,4 +61,113 @@ func TestFloatArrayToClassMetrics(t *testing.T) {
 	assert.Equal(t, uint(1), metrics.ClassId)
 	assert.Equal(t, internal.NumSections, len(metrics.Data))
 	assert.Equal(t, float32(1), metrics.Data[0].CpuMax)
+}
+
+func TestReCluster(t *testing.T) {
+	// 准备测试数据
+	dao, err := NewDao()
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "DAO创建失败")
+		return
+	}
+	s := &serverImpl{
+		config: &ServerConfig{
+			MetricDuration:       0,
+			Port:                 0,
+			ScrapeInterval:       0,
+			ReClusterTime:        0,
+			NumClass:             DefaultNumClass,
+			NumRound:             DefaultNumRound,
+			InitialCenterCsvFile: "",
+		},
+		dao:    dao,
+		logger: log.New(os.Stdout, "TestServer", log.LstdFlags),
+	}
+
+	// 删除无关数据
+	dao.DB().Delete(&ClassSectionMetricsDO{}, "1 = 1")
+	dao.DB().Delete(&AppClassDO{}, "1 = 1")
+	dao.DB().Delete(&AppPodMetricsDO{}, "1 = 1")
+
+	// 导入类别数据
+	centerFin, _ := os.Open("../../test/csv/centers.csv")
+	center, err := readInitialCenter(centerFin)
+	preprocessor := preprocess.Default()
+	for i, metrics := range center {
+		metrics.ClassId = uint(i + 1)
+		temp := &internal.ContainerWorkloadData{
+			ContainerId: fmt.Sprintf("%d", metrics.ClassId),
+			Data:        metrics.Data,
+		}
+		preprocessor.Preprocess(temp)
+		err := dao.SaveClassMetrics(metrics)
+		if !assert.NoError(t, err) {
+			assert.FailNow(t, "保存类别数据失败")
+		}
+	}
+
+	// 导入监控数据
+	metricsFin, _ := os.Open("../../test/csv/30containers.csv")
+	datasource := alitrace.NewAlitraceDatasource(metricsFin)
+	podMetrics := make([]*AppPodMetrics, 0, 30000)
+	appNameSet := map[AppName]struct{}{}
+	for r, err := datasource.Load(); err == nil; r, err = datasource.Load() {
+		pm := &AppPodMetrics{
+			AppName: AppName{
+				Name:      r.ContainerId,
+				Namespace: "test",
+			},
+			Timestamp: r.Timestamp,
+			Cpu:       r.Cpu,
+			Mem:       r.Mem,
+		}
+		podMetrics = append(podMetrics, pm)
+		appNameSet[pm.AppName] = struct{}{}
+	}
+	_ = metricsFin.Close()
+	err = dao.SaveAllAppPodMetrics(podMetrics)
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "保存容器监控数据失败")
+	}
+	podMetrics = nil
+
+	// 测试开始
+	err = s.reCluster()
+	assert.NoError(t, err)
+
+	// 检验聚类结果
+	classCount := map[uint]int{}
+	for appName := range appNameSet {
+		classId, err := dao.QueryAppClassIdByApp(&appName)
+		assert.NoError(t, err)
+		classCount[classId] = classCount[classId] + 1
+	}
+	for _, cnt := range classCount {
+		assert.Condition(t, func() (success bool) {
+			return cnt != len(appNameSet)
+		})
+	}
+
+	// 检查类别是否更新
+	newClassMetrics, err := dao.QueryAllClassMetrics()
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "获取类别数据失败")
+	}
+	assert.Equal(t, int(s.config.NumClass), len(newClassMetrics))
+	for _, m := range center {
+		for _, n := range newClassMetrics {
+			assert.Equal(t, len(m.Data), len(n.Data))
+			equal := true
+			for i := 0; i < len(m.Data); i++ {
+				if m.Data[i].CpuAvg != n.Data[i].CpuAvg {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				assert.Fail(t, "类别数据没有更新")
+			}
+		}
+	}
+
 }

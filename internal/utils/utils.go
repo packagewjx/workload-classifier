@@ -115,16 +115,19 @@ func WorkloadDataToStringRecord(data *internal.ContainerWorkloadData) []string {
 
 func ContainerWorkloadToFloatArray(workloads []*internal.ContainerWorkloadData) map[string][]float32 {
 	result := make(map[string][]float32)
-	typ := reflect.TypeOf(internal.SectionData{})
 	for _, workload := range workloads {
-		arr := make([]float32, internal.NumSectionFields*len(workload.Data))
-		for j, datum := range workload.Data {
-			val := reflect.ValueOf(datum)
-			for k := 0; k < typ.NumField(); k++ {
-				arr[j*internal.NumSectionFields+k] = float32(val.Elem().Field(k).Float())
-			}
-		}
-		result[workload.ContainerId] = arr
+		result[workload.ContainerId] = SectionDataToFloatArray(workload.Data)
 	}
 	return result
+}
+
+func SectionDataToFloatArray(sectionData []*internal.SectionData) []float32 {
+	arr := make([]float32, internal.NumSectionFields*len(sectionData))
+	for j, datum := range sectionData {
+		val := reflect.ValueOf(datum)
+		for k := 0; k < internal.NumSectionFields; k++ {
+			arr[j*internal.NumSectionFields+k] = float32(val.Elem().Field(k).Float())
+		}
+	}
+	return arr
 }
