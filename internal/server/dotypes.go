@@ -14,7 +14,7 @@ type AppDo struct {
 type AppPodMetricsDO struct {
 	gorm.Model
 	AppId     uint   `gorm:"uniqueIndex:unique_record"`
-	Timestamp uint64 `gorm:"uniqueIndex:unique_record,priority:9"`
+	Timestamp uint64 `gorm:"uniqueIndex:unique_record"`
 	Cpu       float32
 	Mem       float32
 }
@@ -23,6 +23,8 @@ type AppClassDO struct {
 	gorm.Model
 	AppId   uint `gorm:"uniqueIndex"`
 	ClassId uint
+	CpuMax  float32
+	MemMax  float32
 }
 
 type ClassSectionMetricsDO struct {

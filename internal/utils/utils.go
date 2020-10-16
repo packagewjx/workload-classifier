@@ -113,10 +113,10 @@ func WorkloadDataToStringRecord(data *internal.ContainerWorkloadData) []string {
 	return record
 }
 
-func ContainerWorkloadToFloatArray(workloads []*internal.ContainerWorkloadData) map[string][]float32 {
-	result := make(map[string][]float32)
-	for _, workload := range workloads {
-		result[workload.ContainerId] = SectionDataToFloatArray(workload.Data)
+func ContainerWorkloadToFloatArray(workloads []*internal.ContainerWorkloadData) [][]float32 {
+	result := make([][]float32, len(workloads))
+	for i, workload := range workloads {
+		result[i] = SectionDataToFloatArray(workload.Data)
 	}
 	return result
 }

@@ -137,11 +137,21 @@ func TestReCluster(t *testing.T) {
 
 	// 检验聚类结果
 	classCount := map[uint]int{}
+	cpuMaxAllZero := true
+	memMaxAllZero := true
 	for appName := range appNameSet {
-		classId, err := dao.QueryAppClassIdByApp(&appName)
+		class, err := dao.QueryAppClassByApp(&appName)
 		assert.NoError(t, err)
-		classCount[classId] = classCount[classId] + 1
+		classCount[class.ClassId] = classCount[class.ClassId] + 1
+		if class.CpuMax != 0 {
+			cpuMaxAllZero = false
+		}
+		if class.MemMax != 0 {
+			memMaxAllZero = false
+		}
 	}
+	assert.False(t, cpuMaxAllZero)
+	assert.False(t, memMaxAllZero)
 	for _, cnt := range classCount {
 		assert.Condition(t, func() (success bool) {
 			return cnt != len(appNameSet)

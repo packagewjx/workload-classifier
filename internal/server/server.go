@@ -149,9 +149,10 @@ func (s *serverImpl) Start() error {
 
 func (s *serverImpl) buildServer() *http.Server {
 	mux := http.NewServeMux()
-	const NamePattern = "[\\d\\w]|(?:[\\d\\w][\\d\\w-.]{0,251}[\\d\\w])"
+	const NamePattern = "(?:[\\d\\w][\\d\\w-.]{0,251}[\\d\\w])|[\\d\\w]"
+	pattern := regexp.MustCompile(fmt.Sprintf("/namespaces/(%s)/appcharacteristics/(%s)", NamePattern, NamePattern))
+
 	mux.HandleFunc("/namespaces/", func(writer http.ResponseWriter, request *http.Request) {
-		pattern := regexp.MustCompile(fmt.Sprintf("/namespaces/(%s)/appclass/(%s)", NamePattern, NamePattern))
 		if !pattern.MatchString(request.URL.Path) {
 			http.NotFound(writer, request)
 			return
@@ -159,30 +160,30 @@ func (s *serverImpl) buildServer() *http.Server {
 		subMatch := pattern.FindStringSubmatch(request.URL.Path)
 		namespace := subMatch[1]
 		name := subMatch[2]
-
-		class, err := s.QueryAppClass(AppName{
+		characteristics, err := s.QueryAppCharacteristics(AppName{
 			Name:      name,
 			Namespace: namespace,
 		})
 		if err == ErrAppNotFound {
-			http.NotFound(writer, request)
+			writer.WriteHeader(http.StatusNotFound)
+			_, _ = writer.Write([]byte(err.Error()))
+			return
+		} else if err == ErrAppNotClassified {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(err.Error()))
 			return
 		} else if err != nil {
 			http.Error(writer, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		marshal, err := json.Marshal(class)
+		marshal, err := json.Marshal(characteristics)
 		if err != nil {
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			http.Error(writer, errors.Wrap(err, "序列化问题").Error(), http.StatusInternalServerError)
 			return
 		}
 
-		writer.Header().Set("Content-Type", "application/json")
-		_, err = writer.Write(marshal)
-		if err != nil {
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
-		}
+		_, _ = writer.Write(marshal)
 	})
 
 	mux.HandleFunc("/recluster", func(writer http.ResponseWriter, request *http.Request) {

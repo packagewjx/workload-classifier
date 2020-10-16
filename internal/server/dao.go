@@ -12,8 +12,6 @@ import (
 	"os"
 )
 
-const unknownNamespace = "Unknown"
-
 type UpdateDao interface {
 	SaveClassMetrics(c *ClassMetrics) error
 	SaveAppClass(a *AppClass) error
@@ -28,8 +26,7 @@ type UpdateDao interface {
 type QueryDao interface {
 	QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error)
 	QueryAllClassMetrics() ([]*ClassMetrics, error)
-	QueryAppClassIdByApp(appName *AppName) (uint, error)
-	QueryAllAppPodMetrics() (map[string]map[string][]*AppPodMetrics, error)
+	QueryAppClassByApp(appName *AppName) (*AppClass, error)
 }
 
 type Dao interface {
@@ -44,6 +41,8 @@ type daoImpl struct {
 	keyFunc  func(appName *AppName) string
 	logger   *log.Logger
 }
+
+var _ Dao = &daoImpl{}
 
 func NewDao(host string) (Dao, error) {
 	databaseURL := fmt.Sprintf("root:wujunxian@tcp(%s)/metrics?charset=utf8mb4&parseTime=True&loc=Local",
@@ -114,20 +113,16 @@ func (d *daoImpl) SaveAppClass(a *AppClass) error {
 	}
 
 	dest := &AppClassDO{}
-	err = d.db.First(dest, &AppClassDO{
+	d.db.First(dest, &AppClassDO{
 		AppId: appId,
-	}).Error
+	})
 
-	if err == gorm.ErrRecordNotFound {
-		d.logger.Printf("不存在AppID为%d，ClassID为%d的记录，正在数据库中创建", appId, a.ClassId)
-		err = d.db.Create(&AppClassDO{
-			AppId:   appId,
-			ClassId: a.ClassId,
-		}).Error
-	} else {
-		dest.ClassId = a.ClassId
-		err = d.db.Updates(dest).Error
-	}
+	dest.AppId = appId
+	dest.ClassId = a.ClassId
+	dest.MemMax = a.MemMax
+	dest.CpuMax = a.CpuMax
+
+	err = d.db.Save(dest).Error
 
 	if err != nil {
 		return errors.Wrap(err, "保存AppClassDO出错，AppID为%d，ClassID为%d")
@@ -228,10 +223,10 @@ func (d *daoImpl) QueryClassMetricsByClassId(classId uint) (*ClassMetrics, error
 	return result, nil
 }
 
-func (d *daoImpl) QueryAppClassIdByApp(appName *AppName) (uint, error) {
+func (d *daoImpl) QueryAppClassByApp(appName *AppName) (*AppClass, error) {
 	appId, err := d.queryAppId(appName, false)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	record := &AppClassDO{}
@@ -239,64 +234,17 @@ func (d *daoImpl) QueryAppClassIdByApp(appName *AppName) (uint, error) {
 		AppId: appId,
 	}).Error
 	if err == gorm.ErrRecordNotFound {
-		return 0, ErrAppNotFound
+		return nil, ErrAppNotClassified
 	} else if err != nil {
-		return 0, errors.Wrap(err, "查询AppClass时出错")
+		return nil, errors.Wrap(err, "查询AppClass时出错")
 	}
 
-	return record.ClassId, nil
-}
-
-func (d *daoImpl) QueryAllAppPodMetrics() (map[string]map[string][]*AppPodMetrics, error) {
-	doarr := []*AppPodMetricsDO{}
-	err := d.db.Order("timestamp ASC").Find(&doarr).Error
-	if err != nil {
-		return nil, errors.Wrap(err, "查询所有AppPodMetrics记录出错")
-	}
-
-	appIdMap := make(map[uint]*AppName)
-
-	result := make(map[string]map[string][]*AppPodMetrics)
-	for _, do := range doarr {
-		appId, ok := appIdMap[do.AppId]
-
-		if !ok {
-			dest := &AppDo{}
-			err := d.db.First(dest, &AppDo{Model: gorm.Model{ID: do.AppId}}).Error
-			if err == gorm.ErrRecordNotFound {
-				log.Printf("不存在AppID为%d的记录，将会把名称设置为%d，命名空间为Unkonwn", do.AppId, do.AppId)
-				dest.AppName = AppName{
-					Name:      fmt.Sprintf("%d", do.AppId),
-					Namespace: unknownNamespace,
-				}
-			} else if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("查询AppId时出错，ID为%d", do.AppId))
-			}
-
-			appIdMap[do.AppId] = &dest.AppName
-			appId = &dest.AppName
-		}
-
-		namespaceMap, ok := result[appId.Namespace]
-		if !ok {
-			namespaceMap = make(map[string][]*AppPodMetrics)
-			result[appId.Namespace] = namespaceMap
-		}
-
-		metricsArr := namespaceMap[appId.Name]
-		metricsArr = append(metricsArr, &AppPodMetrics{
-			AppName: AppName{
-				Name:      appId.Name,
-				Namespace: appId.Namespace,
-			},
-			Timestamp: do.Timestamp,
-			Cpu:       do.Cpu,
-			Mem:       do.Mem,
-		})
-		namespaceMap[appId.Name] = metricsArr
-	}
-
-	return result, nil
+	return &AppClass{
+		AppName: *appName,
+		ClassId: record.ClassId,
+		CpuMax:  record.CpuMax,
+		MemMax:  record.MemMax,
+	}, nil
 }
 
 func (d *daoImpl) QueryAllClassMetrics() ([]*ClassMetrics, error) {

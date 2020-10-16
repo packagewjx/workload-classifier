@@ -102,6 +102,8 @@ func TestDaoImpl_SaveAppClass(t *testing.T) {
 				Namespace: "test",
 			},
 			ClassId: uint(i),
+			CpuMax:  float32(i),
+			MemMax:  float32(i),
 		}
 		err := dao.SaveAppClass(arr[i])
 		assert.NoError(t, err)
@@ -112,20 +114,26 @@ func TestDaoImpl_SaveAppClass(t *testing.T) {
 		dest := &AppClassDO{}
 		impl.db.Where(&AppClassDO{AppId: impl.appIdMap[impl.keyFunc(&class.AppName)]}).First(dest)
 		assert.Equal(t, class.ClassId, dest.ClassId)
+		assert.Equal(t, class.CpuMax, dest.CpuMax)
+		assert.Equal(t, class.MemMax, dest.MemMax)
 	}
 
 	/*
 		测试更新
 	*/
 
-	for i, class := range arr {
-		class.ClassId = uint(10 + i)
+	for _, class := range arr {
+		class.ClassId += 10
+		class.MemMax += 10
+		class.CpuMax += 10
 		err := dao.SaveAppClass(class)
 		assert.NoError(t, err)
 
 		dest := &AppClassDO{}
 		impl.db.Where(&AppClassDO{AppId: impl.appIdMap[impl.keyFunc(&class.AppName)]}).First(dest)
 		assert.Equal(t, class.ClassId, dest.ClassId)
+		assert.Equal(t, class.CpuMax, dest.CpuMax)
+		assert.Equal(t, class.MemMax, dest.MemMax)
 	}
 
 	/*
@@ -311,106 +319,21 @@ func TestDaoImpl_QueryAppClassIdByApp(t *testing.T) {
 		},
 	})
 
-	id, err := dao.QueryAppClassIdByApp(&AppName{
+	appClass, err := dao.QueryAppClassByApp(&AppName{
 		Name:      appName,
 		Namespace: namespace,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, classId, id)
+	assert.Equal(t, classId, appClass.ClassId)
 
 	/*
 		查询不存在的
 	*/
-	_, err = dao.QueryAppClassIdByApp(&AppName{
+	_, err = dao.QueryAppClassByApp(&AppName{
 		Name:      "absolutelyNotExistApp_TestDaoImpl_QueryAppClassIdByApp",
 		Namespace: "absolutelyNotExistNamespace_TestDaoImpl_QueryAppClassIdByApp",
 	})
 	assert.Error(t, err)
-}
-
-func TestDaoImpl_QueryAllAppPodMetrics(t *testing.T) {
-	dao, _ := NewDao(testHost)
-
-	arr := make([]*AppPodMetrics, 0, 100)
-	namespaceMap := map[string]struct {
-		numApp int
-	}{
-		"namespace-1": {
-			numApp: 1,
-		},
-		"namespace-2": {
-			numApp: 2,
-		},
-		"namespace-3": {
-			numApp: 3,
-		},
-		"namespace-4": {
-			numApp: 4,
-		},
-	}
-	appSize := 5
-
-	for namespace, stu := range namespaceMap {
-		for j := 0; j < stu.numApp; j++ {
-			for k := 0; k < appSize; k++ {
-				arr = append(arr, &AppPodMetrics{
-					AppName: AppName{
-						Name:      fmt.Sprintf("test-%d", j),
-						Namespace: namespace,
-					},
-					Timestamp: uint64(k),
-					Cpu:       float32(k),
-					Mem:       float32(k),
-				})
-			}
-		}
-	}
-
-	err := dao.SaveAllAppPodMetrics(arr)
-	if !assert.NoError(t, err) {
-		assert.FailNow(t, "保存AppPodMetrics出错")
-	}
-
-	metricsMap, err := dao.QueryAllAppPodMetrics()
-	assert.NoError(t, err)
-	for namespace, namespaceAppMetricsMap := range metricsMap {
-		if _, ok := namespaceMap[namespace]; !ok {
-			// 跳过不属于本测试的数据
-			continue
-		}
-		assert.Equal(t, namespaceMap[namespace].numApp, len(namespaceAppMetricsMap))
-		for _, metrics := range namespaceAppMetricsMap {
-			assert.Equal(t, appSize, len(metrics))
-			for i, metric := range metrics {
-				assert.Equal(t, uint64(i), metric.Timestamp)
-			}
-		}
-	}
-
-	db := dao.(*daoImpl).db
-	err = db.Delete(&AppPodMetricsDO{}, "1 = 1").Error
-	if !assert.NoError(t, err) {
-		assert.FailNow(t, "删除所有AppPodMetrics记录失败")
-	}
-
-	noExistAppId := uint(2333)
-	db.Create(&AppPodMetricsDO{
-		Model:     gorm.Model{},
-		AppId:     noExistAppId,
-		Timestamp: 0,
-		Cpu:       0,
-		Mem:       0,
-	})
-
-	metricsMap, err = dao.QueryAllAppPodMetrics()
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(metricsMap))
-	m, ok := metricsMap[unknownNamespace]
-	assert.True(t, ok)
-	assert.Equal(t, 1, len(m))
-	a, ok := m[fmt.Sprintf("%d", noExistAppId)]
-	assert.True(t, ok)
-	assert.Equal(t, 1, len(a))
 }
 
 func TestDaoImpl_RemoveAllClassMetrics(t *testing.T) {

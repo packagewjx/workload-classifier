@@ -136,7 +136,7 @@ func TestContainerWorkloadToFloatArray(t *testing.T) {
 		},
 	}
 
-	array := ContainerWorkloadToFloatArray(data)["test"]
+	array := ContainerWorkloadToFloatArray(data)[0]
 	assert.Equal(t, 12, len(array))
 	assert.Equal(t, float32(1), array[0])
 	assert.Equal(t, float32(2), array[1])

@@ -37,8 +37,7 @@ func (s *serverImpl) reClusterer(ctx context.Context) {
 		}
 
 		s.logger.Println("正在更新数据库的中心数据")
-		for i, center := range center {
-			center.ClassId = uint(i + 1)
+		for _, center := range center {
 			err := s.dao.SaveClassMetrics(center)
 			if err != nil {
 				panic(fmt.Sprintf("写入类数据失败，类数据为%v，错误为：%v", center, err))
@@ -92,8 +91,8 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 		}
 
 		c := &ClassMetrics{
-			ClassId: 0,
-			Data:    make([]*internal.SectionData, internal.NumSections),
+			ClassId: uint(i + 1),
+			Data:    nil,
 		}
 
 		array, err := utils.RecordsToSectionArray(record)
@@ -118,6 +117,11 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 func (s *serverImpl) reCluster() error {
 	s.logger.Println("再聚类开始")
 
+	type dataFeature struct {
+		cpuMax float32
+		memMax float32
+	}
+
 	// 获取并转换数据
 	s.logger.Println("正在获取所有应用监控数据")
 	dataSource := NewDatabaseDatasource(s.dao.DB())
@@ -126,27 +130,35 @@ func (s *serverImpl) reCluster() error {
 		return errors.Wrap(err, "读取数据库监控出错")
 	}
 	workloadData := datasource.ConvertAllRawData(rawData)
+
+	// 由于预处理后真实数据将会丢失，此处保留数据特征
+	features := make([]dataFeature, len(workloadData))
+	for i, datum := range workloadData {
+		cpuMax := float32(0)
+		memMax := float32(0)
+		for _, data := range datum.Data {
+			if data.CpuMax > cpuMax {
+				cpuMax = data.CpuMax
+			}
+			if data.MemMax > memMax {
+				memMax = data.MemMax
+			}
+		}
+		features[i].cpuMax = cpuMax
+		features[i].memMax = memMax
+	}
+
 	preprocessor := preprocess.Default()
 	for _, datum := range workloadData {
 		preprocessor.Preprocess(datum)
 	}
-	workloadFloatMap := utils.ContainerWorkloadToFloatArray(workloadData)
-	workloadData = nil
+	dataArray := utils.ContainerWorkloadToFloatArray(workloadData)
 
 	// 获取算法实现
 	alg := classify.GetAlgorithm(classify.KMeans)
 	ctx := &classify.KMeansContext{
 		Round: int(s.config.NumRound),
 	}
-
-	// 保存每个位置的ID
-	dataArray := make([][]float32, 0, len(workloadFloatMap))
-	idArray := make([]string, 0, len(workloadFloatMap))
-	for containerId, arr := range workloadFloatMap {
-		idArray = append(idArray, containerId)
-		dataArray = append(dataArray, arr)
-	}
-	workloadFloatMap = nil
 
 	// 获取类别中心，并加入到dataArray中作为数据的一部分，避免中心变化太大
 	s.logger.Println("正在获取聚类中心数据，并加入到数据集中")
@@ -173,10 +185,12 @@ func (s *serverImpl) reCluster() error {
 	}
 
 	s.logger.Println("保存新的应用与类别绑定关系")
-	for i := 0; i < len(idArray); i++ {
+	for i := 0; i < len(workloadData); i++ {
 		a := &AppClass{
-			AppName: AppNameFromContainerId(idArray[i]),
+			AppName: AppNameFromContainerId(workloadData[i].ContainerId),
 			ClassId: uint(class[i]),
+			CpuMax:  features[i].cpuMax,
+			MemMax:  features[i].memMax,
 		}
 		err := s.dao.SaveAppClass(a)
 		if err != nil {
