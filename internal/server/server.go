@@ -42,29 +42,30 @@ type ServerConfig struct {
 	NumClass             uint          // 类别数量
 	NumRound             uint          // 聚类迭代轮次
 	InitialCenterCsvFile string        // 初始各类中心的数据文件。若不是空，则会清空数据库的数据并读取。若为空，则使用数据库数据，此时如果数据库没有类别数据，则会产生错误。
+	MysqlHost            string
 }
 
 func (s ServerConfig) String() string {
-	return fmt.Sprintf("监听端口：%d。数据保留时长：%v。再聚类时间：%v。类别数量：%v。聚类迭代论次：%v。获取数据周期：%v。初始中心文件：'%v'。",
-		s.Port, s.MetricDuration, s.ReClusterTime, s.NumClass, s.NumRound, s.ScrapeInterval, s.InitialCenterCsvFile)
+	marshal, _ := json.Marshal(s)
+	return string(marshal)
 }
 
 type Server interface {
 	Start() error
 }
 
-func NewServer(ctx *ServerConfig) (Server, error) {
-	if err := checkConfig(ctx); err != nil {
+func NewServer(config *ServerConfig) (Server, error) {
+	if err := config.Complete(); err != nil {
 		return nil, err
 	}
 
-	dao, err := NewDao()
+	dao, err := NewDao(config.MysqlHost)
 	if err != nil {
 		return nil, err
 	}
 
 	return &serverImpl{
-		config:           ctx,
+		config:           config,
 		dao:              dao,
 		logger:           log.New(os.Stdout, "workload server: ", log.LstdFlags|log.Lshortfile|log.Lmsgprefix),
 		executeReCluster: make(chan struct{}),
@@ -78,7 +79,7 @@ type serverImpl struct {
 	executeReCluster chan struct{}
 }
 
-func checkConfig(config *ServerConfig) error {
+func (config *ServerConfig) Complete() error {
 	if config.Port < 1024 {
 		return fmt.Errorf("端口号应该在1024到65535之间，现在为%d", config.Port)
 	}
@@ -99,6 +100,11 @@ func checkConfig(config *ServerConfig) error {
 	}
 	if config.NumClass == 0 {
 		return fmt.Errorf("聚类类别数目不能为0")
+	}
+
+	if config.MysqlHost == "" {
+		config.MysqlHost = fmt.Sprintf("%s:%s",
+			os.Getenv("MYSQL_SERVICE_HOST"), os.Getenv("MYSQL_SERVICE_PORT"))
 	}
 
 	return nil

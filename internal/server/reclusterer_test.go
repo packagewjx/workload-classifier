@@ -65,7 +65,7 @@ func TestFloatArrayToClassMetrics(t *testing.T) {
 
 func TestReCluster(t *testing.T) {
 	// 准备测试数据
-	dao, err := NewDao()
+	dao, err := NewDao(testHost)
 	if !assert.NoError(t, err) {
 		assert.FailNow(t, "DAO创建失败")
 		return

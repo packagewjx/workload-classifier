@@ -9,7 +9,7 @@ import (
 )
 
 func TestDbDatasource_Load(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 	_ = dao.RemoveAppPodMetricsBefore(math.MaxUint64)
 	const sectionSize = 10
 	testData := make([]*AppPodMetrics, 0, NumSections*sectionSize)

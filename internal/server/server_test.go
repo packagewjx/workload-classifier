@@ -15,6 +15,7 @@ func TestNewServer(t *testing.T) {
 		NumClass:             DefaultNumClass,
 		NumRound:             DefaultNumRound,
 		InitialCenterCsvFile: "",
+		MysqlHost:            "127.0.0.1:3306",
 	}
 	_, err := NewServer(&ctx)
 	assert.NoError(t, err)

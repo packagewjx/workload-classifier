@@ -12,7 +12,6 @@ import (
 	"os"
 )
 
-const databaseURL = "root:wujunxian@tcp(127.0.0.1:3306)/metrics?charset=utf8mb4&parseTime=True&loc=Local"
 const unknownNamespace = "Unknown"
 
 type UpdateDao interface {
@@ -46,7 +45,9 @@ type daoImpl struct {
 	logger   *log.Logger
 }
 
-func NewDao() (Dao, error) {
+func NewDao(host string) (Dao, error) {
+	databaseURL := fmt.Sprintf("root:wujunxian@tcp(%s)/metrics?charset=utf8mb4&parseTime=True&loc=Local",
+		host)
 	db, err := gorm.Open(mysql.Open(databaseURL), &gorm.Config{
 		Logger: logger.New(log.New(os.Stdout, "", 0), logger.Config{
 			LogLevel: logger.Silent,
@@ -336,7 +337,7 @@ func (d *daoImpl) queryAppId(appName *AppName, createIfNil bool) (uint, error) {
 	d.logger.Printf("缓存中没有找到名称为%s，命名空间为%s的ID记录，将从数据库中获取\n", appName.Name, appName.Namespace)
 
 	app := &AppDo{}
-	err := d.db.FirstOrInit(app, &AppDo{
+	err := d.db.First(app, &AppDo{
 		AppName: AppName{
 			Name:      appName.Name,
 			Namespace: appName.Namespace,
@@ -348,6 +349,8 @@ func (d *daoImpl) queryAppId(appName *AppName, createIfNil bool) (uint, error) {
 			return 0, ErrAppNotFound
 		}
 		d.logger.Printf("数据库中不存在名称为%s，命名空间为%s的ID记录，将创建\n", appName.Name, appName.Namespace)
+		app.Name = appName.Name
+		app.Namespace = appName.Namespace
 		err = d.db.Create(app).Error
 	}
 

@@ -10,8 +10,10 @@ import (
 	"testing"
 )
 
+var testHost = "127.0.0.1:3306"
+
 func init() {
-	db, err := gorm.Open(mysql.Open(databaseURL), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(fmt.Sprintf("root:wujunxian@tcp(%s)/metrics?charset=utf8mb4&parseTime=True&loc=Local", testHost)), &gorm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +26,7 @@ func init() {
 }
 
 func TestNewDao(t *testing.T) {
-	db, _ := gorm.Open(mysql.Open(databaseURL), &gorm.Config{})
+	db, _ := gorm.Open(mysql.Open(fmt.Sprintf("root:wujunxian@tcp(%s)/metrics?charset=utf8mb4&parseTime=True&loc=Local", testHost)), &gorm.Config{})
 	db.Create(&AppDo{
 		Model: gorm.Model{ID: 1000},
 		AppName: AppName{
@@ -33,7 +35,7 @@ func TestNewDao(t *testing.T) {
 		},
 	})
 
-	_, err := NewDao()
+	_, err := NewDao(testHost)
 	assert.NoError(t, err)
 }
 
@@ -51,7 +53,7 @@ func TestDao_SaveAllAppPodMetrics(t *testing.T) {
 		}
 	}
 
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 
 	err := dao.SaveAllAppPodMetrics(arr)
 	if !assert.NoError(t, err) {
@@ -87,7 +89,7 @@ func TestDao_SaveAllAppPodMetrics(t *testing.T) {
 }
 
 func TestDaoImpl_SaveAppClass(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 
 	/*
 		测试新增
@@ -161,7 +163,7 @@ func TestDaoImpl_SaveClassMetrics(t *testing.T) {
 		c.Data[i].MemP99 = float32(i)
 	}
 
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 	err := dao.SaveClassMetrics(c)
 	assert.NoError(t, err)
 
@@ -176,7 +178,7 @@ func TestDaoImpl_SaveClassMetrics(t *testing.T) {
 }
 
 func TestDaoImpl_RemoveAppPodMetricsBefore(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 	size := 10000
 	arr := make([]*AppPodMetrics, size)
 	for i := 0; i < size; i++ {
@@ -213,7 +215,7 @@ func TestDaoImpl_RemoveAppPodMetricsBefore(t *testing.T) {
 }
 
 func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 	classId := uint(10)
 	c := &ClassMetrics{
 		ClassId: classId,
@@ -288,7 +290,7 @@ func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 }
 
 func TestDaoImpl_QueryAppClassIdByApp(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 
 	db := dao.(*daoImpl).db
 	classId := uint(10)
@@ -327,7 +329,7 @@ func TestDaoImpl_QueryAppClassIdByApp(t *testing.T) {
 }
 
 func TestDaoImpl_QueryAllAppPodMetrics(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 
 	arr := make([]*AppPodMetrics, 0, 100)
 	namespaceMap := map[string]struct {
@@ -412,7 +414,7 @@ func TestDaoImpl_QueryAllAppPodMetrics(t *testing.T) {
 }
 
 func TestDaoImpl_RemoveAllClassMetrics(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 	db := dao.(*daoImpl).db
 	for i := 0; i < 10; i++ {
 		err := db.Create(&ClassSectionMetricsDO{}).Error
@@ -434,7 +436,7 @@ func TestDaoImpl_RemoveAllClassMetrics(t *testing.T) {
 }
 
 func TestDaoImpl_QueryAllClassMetrics(t *testing.T) {
-	dao, _ := NewDao()
+	dao, _ := NewDao(testHost)
 	err := dao.DB().Delete(&ClassSectionMetricsDO{}, "1 = 1").Error
 	if err != nil {
 		assert.FailNow(t, "删除数据失败")

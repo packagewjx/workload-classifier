@@ -7,7 +7,7 @@ import (
 )
 
 func TestScrape(t *testing.T) {
-	server, _ := NewServer(&ServerConfig{
+	server, err := NewServer(&ServerConfig{
 		MetricDuration:       7 * 24 * time.Hour,
 		Port:                 2000,
 		ScrapeInterval:       30 * time.Second,
@@ -15,7 +15,11 @@ func TestScrape(t *testing.T) {
 		NumClass:             30,
 		NumRound:             20,
 		InitialCenterCsvFile: "",
+		MysqlHost:            "127.0.0.1:3306",
 	})
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "创建服务器失败")
+	}
 	impl := server.(*serverImpl)
 
 	metrics, err := impl.scrapePodMetrics()

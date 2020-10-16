@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
 	"github.com/packagewjx/workload-classifier/internal/server"
 	"github.com/spf13/cobra"
 	"time"
@@ -30,6 +29,7 @@ const (
 	FlagNumRound        = "round"
 	FlagNumClass        = "class"
 	FlagCenterFile      = "center-file"
+	FlagMysqlHost       = "mysql-host"
 )
 
 var (
@@ -40,6 +40,7 @@ var (
 	numRound        uint
 	numClass        uint
 	centerFile      string
+	mysqlHost       string
 )
 
 // serverCmd represents the server command
@@ -58,6 +59,7 @@ var serverCmd = &cobra.Command{
 			NumClass:             numClass,
 			NumRound:             numRound,
 			InitialCenterCsvFile: centerFile,
+			MysqlHost:            mysqlHost,
 		})
 		if err != nil {
 			return err
@@ -71,17 +73,19 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 
 	serverCmd.Flags().Uint16VarP(&port, FlagPort, "p", server.DefaultPort,
-		fmt.Sprintf("服务端口号，默认为%d", server.DefaultPort))
+		"服务端口号")
 	serverCmd.Flags().DurationVarP(&scrapeInterval, FlagScrapeInterval, "i", server.DefaultScrapeInterval,
-		fmt.Sprintf("获取监控数据的间隔，至少为15s。默认为%f秒", server.DefaultScrapeInterval.Seconds()))
+		"获取监控数据的间隔，至少为15s")
 	serverCmd.Flags().DurationVarP(&metricsDuration, FlagMetricsDuration, "d", server.DefaultMetricDuration,
-		fmt.Sprintf("保存数据的时间，至少为1天。默认为%f小时", server.DefaultMetricDuration.Hours()))
+		"保存数据的时间，至少为1天")
 	serverCmd.Flags().DurationVarP(&reClusterTime, FlagReClusterTime, "t", server.DefaultReClusterTime,
-		fmt.Sprintf("每天定时跑聚类算法的时间，值应该小于24小时。默认为%f时", server.DefaultReClusterTime.Hours()))
+		"每天定时跑聚类算法的时间，值应该小于24小时")
 	serverCmd.Flags().UintVarP(&numRound, FlagNumRound, "r", server.DefaultNumRound,
-		fmt.Sprintf("聚类迭代次数，默认为%d", server.DefaultNumRound))
+		"聚类迭代次数")
 	serverCmd.Flags().UintVarP(&numClass, FlagNumClass, "c", server.DefaultNumClass,
-		fmt.Sprintf("聚类类别数量，默认为%d", server.DefaultNumClass))
+		"聚类类别数量")
 	serverCmd.Flags().StringVarP(&centerFile, FlagCenterFile, "f", "",
 		"初始中心文件。若不为空，则启动时将会读取此文件并作为各个类别的数据，此过程将删除旧有数据。若为空，则使用原类数据")
+	serverCmd.Flags().StringVar(&mysqlHost, FlagMysqlHost, "",
+		"Mysql服务器主机端口，格式为：host:port。若为空，则读取环境变量MYSQL_SERVICE_HOST与MYSQL_SERVICE_PORT取得")
 }
