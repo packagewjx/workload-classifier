@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"strings"
 )
 
@@ -21,8 +21,8 @@ type AppClass struct {
 }
 
 type ClassMetrics struct {
-	ClassId uint                    `json:"classId"`
-	Data    []*internal.SectionData `json:"data"`
+	ClassId uint                `json:"classId"`
+	Data    []*core.SectionData `json:"data"`
 }
 
 type AppName struct {
@@ -51,5 +51,11 @@ var ErrAppNotClassified = fmt.Errorf("尚未对App分类")
 type AppCharacteristics struct {
 	AppName `json:",inline"`
 
-	SectionData []*internal.SectionData `json:"sectionData"`
+	SectionData []*core.SectionData `json:"sectionData"`
+}
+
+type API interface {
+	QueryAppCharacteristics(appName AppName) (*AppCharacteristics, error)
+
+	ReCluster()
 }

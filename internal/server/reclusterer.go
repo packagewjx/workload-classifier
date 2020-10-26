@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/packagewjx/workload-classifier/internal/classify"
 	"github.com/packagewjx/workload-classifier/internal/datasource"
 	"github.com/packagewjx/workload-classifier/internal/preprocess"
 	"github.com/packagewjx/workload-classifier/internal/utils"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/pkg/errors"
 	"io"
 	"os"
@@ -75,8 +76,8 @@ func (s *serverImpl) reClusterer(ctx context.Context) {
 
 }
 
-func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
-	result := make([]*ClassMetrics, 0)
+func readInitialCenter(csvInput io.Reader) ([]*server.ClassMetrics, error) {
+	result := make([]*server.ClassMetrics, 0)
 	records, err := csv.NewReader(csvInput).ReadAll()
 	if err != nil {
 		return nil, errors.Wrap(err, "读取CSV数据出错")
@@ -86,11 +87,11 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 
 	preprocessor := preprocess.Default()
 	for i, record := range records {
-		if len(record) != internal.NumSections*internal.NumSectionFields {
+		if len(record) != core.NumSections*core.NumSectionFields {
 			return nil, fmt.Errorf("第%d行数据有问题", i)
 		}
 
-		c := &ClassMetrics{
+		c := &server.ClassMetrics{
 			ClassId: uint(i + 1),
 			Data:    nil,
 		}
@@ -100,7 +101,7 @@ func readInitialCenter(csvInput io.Reader) ([]*ClassMetrics, error) {
 			return nil, errors.Wrap(err, fmt.Sprintf("第%d行数据有问题", i))
 		}
 		// 对array的数据进行预处理
-		temp := &internal.ContainerWorkloadData{
+		temp := &core.ContainerWorkloadData{
 			ContainerId: "",
 			Data:        array,
 		}
@@ -186,8 +187,8 @@ func (s *serverImpl) reCluster() error {
 
 	s.logger.Println("保存新的应用与类别绑定关系")
 	for i := 0; i < len(workloadData); i++ {
-		a := &AppClass{
-			AppName: AppNameFromContainerId(workloadData[i].ContainerId),
+		a := &server.AppClass{
+			AppName: server.AppNameFromContainerId(workloadData[i].ContainerId),
 			ClassId: uint(class[i]),
 			CpuMax:  features[i].cpuMax,
 			MemMax:  features[i].memMax,
@@ -203,17 +204,17 @@ func (s *serverImpl) reCluster() error {
 	return nil
 }
 
-func floatArrayToClassMetrics(id int, data []float32) *ClassMetrics {
-	result := &ClassMetrics{
+func floatArrayToClassMetrics(id int, data []float32) *server.ClassMetrics {
+	result := &server.ClassMetrics{
 		ClassId: uint(id),
-		Data:    make([]*internal.SectionData, internal.NumSections),
+		Data:    make([]*core.SectionData, core.NumSections),
 	}
 
 	for i := 0; i < len(result.Data); i++ {
-		result.Data[i] = &internal.SectionData{}
+		result.Data[i] = &core.SectionData{}
 		val := reflect.ValueOf(result.Data[i]).Elem()
-		for j := 0; j < internal.NumSectionFields; j++ {
-			val.Field(j).SetFloat(float64(data[i*internal.NumSectionFields+j]))
+		for j := 0; j < core.NumSectionFields; j++ {
+			val.Field(j).SetFloat(float64(data[i*core.NumSectionFields+j]))
 		}
 	}
 

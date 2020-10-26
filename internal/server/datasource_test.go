@@ -1,8 +1,9 @@
 package server
 
 import (
-	. "github.com/packagewjx/workload-classifier/internal"
 	. "github.com/packagewjx/workload-classifier/internal/datasource"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"testing"
@@ -12,15 +13,15 @@ func TestDbDatasource_Load(t *testing.T) {
 	dao, _ := NewDao(testHost)
 	_ = dao.RemoveAppPodMetricsBefore(math.MaxUint64)
 	const sectionSize = 10
-	testData := make([]*AppPodMetrics, 0, NumSections*sectionSize)
-	for i := 0; i < NumSections; i++ {
+	testData := make([]*server.AppPodMetrics, 0, core.NumSections*sectionSize)
+	for i := 0; i < core.NumSections; i++ {
 		for j := 0; j < sectionSize; j++ {
-			testData = append(testData, &AppPodMetrics{
-				AppName: AppName{
+			testData = append(testData, &server.AppPodMetrics{
+				AppName: server.AppName{
 					Name:      "test",
 					Namespace: "test",
 				},
-				Timestamp: uint64(SectionLength*i + j),
+				Timestamp: uint64(core.SectionLength*i + j),
 				Cpu:       float32((j + 1) * 10),
 				Mem:       float32((j + 1) * 10),
 			})
@@ -46,7 +47,7 @@ func TestDbDatasource_Load(t *testing.T) {
 	assert.Equal(t, 1, len(data))
 	rawData := data[0]
 	assert.Equal(t, testData[0].AppName.ContainerId(), rawData.ContainerId)
-	assert.Equal(t, NumSections, len(rawData.Data))
+	assert.Equal(t, core.NumSections, len(rawData.Data))
 	for _, datum := range rawData.Data {
 		assert.Equal(t, sectionSize, len(datum.Cpu))
 		assert.Equal(t, sectionSize, len(datum.Mem))

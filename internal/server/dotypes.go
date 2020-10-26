@@ -1,14 +1,15 @@
 package server
 
 import (
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"gorm.io/gorm"
 	"time"
 )
 
 type AppDo struct {
 	gorm.Model
-	AppName
+	server.AppName
 }
 
 type AppPodMetricsDO struct {
@@ -33,5 +34,5 @@ type ClassSectionMetricsDO struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
-	internal.SectionData
+	core.SectionData
 }

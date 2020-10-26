@@ -1,21 +1,21 @@
 package datasource
 
 import (
-	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/packagewjx/workload-classifier/internal/utils"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"math"
 	"sync"
 )
 
-func ConvertRawData(rawData *internal.ContainerRawData) *internal.ContainerWorkloadData {
+func ConvertRawData(rawData *core.ContainerRawData) *core.ContainerWorkloadData {
 	rawSectionData := rawData.Data
-	cData := &internal.ContainerWorkloadData{
+	cData := &core.ContainerWorkloadData{
 		ContainerId: rawData.ContainerId,
-		Data:        make([]*internal.SectionData, len(rawSectionData)),
+		Data:        make([]*core.SectionData, len(rawSectionData)),
 	}
 
 	for si, section := range rawSectionData {
-		stat := &internal.SectionData{}
+		stat := &core.SectionData{}
 		if len(section.Cpu) != 0 {
 			stat.CpuAvg = section.CpuSum / float32(len(section.Cpu))
 			stat.CpuMax = utils.GetSortedPositionValue(section.Cpu, len(section.Cpu)-1)
@@ -52,12 +52,12 @@ func ConvertRawData(rawData *internal.ContainerRawData) *internal.ContainerWorkl
 	return cData
 }
 
-func ConvertAllRawData(rawData []*internal.ContainerRawData) []*internal.ContainerWorkloadData {
+func ConvertAllRawData(rawData []*core.ContainerRawData) []*core.ContainerWorkloadData {
 	wg := sync.WaitGroup{}
-	result := make([]*internal.ContainerWorkloadData, len(rawData))
+	result := make([]*core.ContainerWorkloadData, len(rawData))
 	for i, datum := range rawData {
 		wg.Add(1)
-		go func(idx int, d *internal.ContainerRawData) {
+		go func(idx int, d *core.ContainerRawData) {
 			defer wg.Done()
 			result[idx] = ConvertRawData(d)
 		}(i, datum)

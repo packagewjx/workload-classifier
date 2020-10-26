@@ -1,7 +1,8 @@
 package server
 
 import (
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"math/rand"
@@ -38,13 +39,13 @@ func TestServerImpl_QueryAppCharacteristics(t *testing.T) {
 	}
 
 	const sectionSize = 15
-	arr := []*AppPodMetrics{}
-	for i := 0; i < internal.NumSections; i++ {
+	arr := []*server.AppPodMetrics{}
+	for i := 0; i < core.NumSections; i++ {
 		for j := 0; j < sectionSize; j++ {
-			t := uint64(i*internal.SectionLength + 60*j)
+			t := uint64(i*core.SectionLength + 60*j)
 			// 一个基本没有负载的应用数据
-			arr = append(arr, &AppPodMetrics{
-				AppName: AppName{
+			arr = append(arr, &server.AppPodMetrics{
+				AppName: server.AppName{
 					Name:      "low",
 					Namespace: "test",
 				},
@@ -54,8 +55,8 @@ func TestServerImpl_QueryAppCharacteristics(t *testing.T) {
 			})
 
 			// 一个基本高负载的应用数据
-			arr = append(arr, &AppPodMetrics{
-				AppName: AppName{
+			arr = append(arr, &server.AppPodMetrics{
+				AppName: server.AppName{
 					Name:      "high",
 					Namespace: "test",
 				},
@@ -65,14 +66,14 @@ func TestServerImpl_QueryAppCharacteristics(t *testing.T) {
 			})
 
 			// 一个线性增长的应用数据
-			arr = append(arr, &AppPodMetrics{
-				AppName: AppName{
+			arr = append(arr, &server.AppPodMetrics{
+				AppName: server.AppName{
 					Name:      "linear",
 					Namespace: "test",
 				},
 				Timestamp: t,
-				Cpu:       100 * (float32(t) / internal.DayLength),
-				Mem:       100 * (float32(t) / internal.DayLength),
+				Cpu:       100 * (float32(t) / core.DayLength),
+				Mem:       100 * (float32(t) / core.DayLength),
 			})
 		}
 	}
@@ -87,21 +88,21 @@ func TestServerImpl_QueryAppCharacteristics(t *testing.T) {
 		assert.FailNow(t, "聚类错误")
 	}
 
-	low, err := s.QueryAppCharacteristics(AppName{
+	low, err := s.QueryAppCharacteristics(server.AppName{
 		Name:      "low",
 		Namespace: "test",
 	})
 	assert.NoError(t, err)
 	assert.NotEqual(t, 0, len(low.SectionData))
 
-	high, err := s.QueryAppCharacteristics(AppName{
+	high, err := s.QueryAppCharacteristics(server.AppName{
 		Name:      "high",
 		Namespace: "test",
 	})
 	assert.NoError(t, err)
 	assert.NotEqual(t, 0, len(high.SectionData))
 
-	linear, err := s.QueryAppCharacteristics(AppName{
+	linear, err := s.QueryAppCharacteristics(server.AppName{
 		Name:      "linear",
 		Namespace: "test",
 	})

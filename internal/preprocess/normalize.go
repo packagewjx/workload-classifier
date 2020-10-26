@@ -3,8 +3,8 @@ package preprocess
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/packagewjx/workload-classifier/internal/utils"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -20,9 +20,9 @@ func Normalize() Preprocessor {
 type normalize struct {
 }
 
-func (n normalize) Preprocess(workload *internal.ContainerWorkloadData) {
+func (n normalize) Preprocess(workload *core.ContainerWorkloadData) {
 	data := workload.Data
-	typ := reflect.TypeOf(internal.SectionData{})
+	typ := reflect.TypeOf(core.SectionData{})
 	dataVal := make([]reflect.Value, len(data))
 	for i, datum := range data {
 		dataVal[i] = reflect.ValueOf(datum)
@@ -66,7 +66,7 @@ func NormalizeSection(in io.Reader, out io.Writer) error {
 		return errors.Wrap(err, "读取数据失败")
 	}
 
-	cDataArray := make([]*internal.ContainerWorkloadData, len(records))
+	cDataArray := make([]*core.ContainerWorkloadData, len(records))
 
 	log.Println("读取完毕，正在转换数据")
 	wg := sync.WaitGroup{}
@@ -75,9 +75,9 @@ func NormalizeSection(in io.Reader, out io.Writer) error {
 	normalize := Normalize()
 
 	for i, record := range records {
-		if len(record) < internal.NumSectionFields*internal.NumSections {
+		if len(record) < core.NumSectionFields*core.NumSections {
 			return fmt.Errorf("第%d行数据有问题，数据长度不足%d",
-				i, internal.NumSectionFields*internal.NumSections)
+				i, core.NumSectionFields*core.NumSections)
 		}
 		wg.Add(1)
 		go func(idx int, record []string) {

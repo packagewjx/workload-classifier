@@ -3,8 +3,8 @@ package alitrace
 import (
 	"bufio"
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/packagewjx/workload-classifier/internal/datasource"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/pkg/errors"
 	"io"
 	"strconv"
@@ -21,9 +21,9 @@ type alitraceDataSource struct {
 }
 
 func (a *alitraceDataSource) Load() (*datasource.ContainerMetric, error) {
-	line, err := a.reader.ReadString(internal.LineBreak)
+	line, err := a.reader.ReadString(core.LineBreak)
 	if line != "" {
-		record := strings.Split(line, internal.Splitter)
+		record := strings.Split(line, core.Splitter)
 		if len(record) != 11 {
 			return nil, fmt.Errorf("输入格式有误。可能不是有效的container_usage.csv文件")
 		}

@@ -1,9 +1,11 @@
 package datasource
 
-import "github.com/packagewjx/workload-classifier/internal"
+import (
+	"github.com/packagewjx/workload-classifier/pkg/core"
+)
 
 type RawDataReader interface {
-	Read() ([]*internal.ContainerRawData, error)
+	Read() ([]*core.ContainerRawData, error)
 }
 
 type MetricDataSource interface {

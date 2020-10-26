@@ -3,7 +3,7 @@ package alitrace
 import (
 	"bufio"
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/pkg/errors"
 	"io"
 	"os"
@@ -23,11 +23,11 @@ func SplitContainerUsage(in io.Reader, meta map[string][]*ContainerMeta) error {
 
 	var line string
 	var err error
-	for line, err = reader.ReadString(internal.LineBreak); err == nil || (err == io.EOF && line != ""); line, err = reader.ReadString(internal.LineBreak) {
+	for line, err = reader.ReadString(core.LineBreak); err == nil || (err == io.EOF && line != ""); line, err = reader.ReadString(core.LineBreak) {
 		if line == "" {
 			continue
 		}
-		cid := line[:strings.Index(line, internal.Splitter)]
+		cid := line[:strings.Index(line, core.Splitter)]
 
 		var appDu string
 		record, ok := meta[cid]

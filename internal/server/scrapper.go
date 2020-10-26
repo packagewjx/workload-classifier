@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +34,7 @@ func (s *serverImpl) scrapper(ctx context.Context) {
 	}
 }
 
-func (s *serverImpl) scrapePodMetrics() ([]*AppPodMetrics, error) {
+func (s *serverImpl) scrapePodMetrics() ([]*server.AppPodMetrics, error) {
 	listFunc := func(url string, dest interface{}) error {
 		response, err := http.Get(url)
 		if err != nil {
@@ -61,12 +62,12 @@ func (s *serverImpl) scrapePodMetrics() ([]*AppPodMetrics, error) {
 	}
 	s.logger.Printf("获取了%d条PodList数据\n", len(podList.Items))
 
-	podAppNameMap := make(map[string]AppName)
+	podAppNameMap := make(map[string]server.AppName)
 	for _, item := range podList.Items {
 		for _, reference := range item.OwnerReferences {
 			switch reference.Kind {
 			case KindDaemonSet, KindStatefulSet, KindReplicaSet:
-				podAppNameMap[keyFunc(item.Name, item.Namespace)] = AppName{
+				podAppNameMap[keyFunc(item.Name, item.Namespace)] = server.AppName{
 					Name:      reference.Name,
 					Namespace: item.Namespace,
 				}
@@ -86,7 +87,7 @@ func (s *serverImpl) scrapePodMetrics() ([]*AppPodMetrics, error) {
 	}
 	s.logger.Printf("获取了%d条PodMetricsList数据\n", len(podMetricsList.Items))
 
-	result := make([]*AppPodMetrics, 0, len(podMetricsList.Items))
+	result := make([]*server.AppPodMetrics, 0, len(podMetricsList.Items))
 	for _, podMetrics := range podMetricsList.Items {
 		cpu := float32(0)
 		mem := float32(0)
@@ -100,7 +101,7 @@ func (s *serverImpl) scrapePodMetrics() ([]*AppPodMetrics, error) {
 			continue
 		}
 
-		m := &AppPodMetrics{
+		m := &server.AppPodMetrics{
 			AppName:   appName,
 			Timestamp: uint64(podMetrics.Timestamp.Unix()),
 			Cpu:       cpu,

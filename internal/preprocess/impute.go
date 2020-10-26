@@ -3,8 +3,8 @@ package preprocess
 import (
 	"bufio"
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/packagewjx/workload-classifier/internal/utils"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/pkg/errors"
 	"io"
 	"log"
@@ -20,8 +20,8 @@ func Impute() Preprocessor {
 type imputePreProcessor struct {
 }
 
-func (i imputePreProcessor) Preprocess(workload *internal.ContainerWorkloadData) {
-	for fi := 0; fi < internal.NumSectionFields; fi++ {
+func (i imputePreProcessor) Preprocess(workload *core.ContainerWorkloadData) {
+	for fi := 0; fi < core.NumSectionFields; fi++ {
 		invalidLeft := -1
 		for si := 0; si < len(workload.Data); si++ {
 			f := reflect.ValueOf(workload.Data[si]).Elem().Field(fi).Float()
@@ -73,20 +73,20 @@ func ImputeMissingValues(in io.Reader, out io.Writer) error {
 	var err error
 	lineCount := 0
 	impute := Impute()
-	for line, err = reader.ReadString(internal.LineBreak); err == nil || (line != "" && err == io.EOF); line, err = reader.ReadString(internal.LineBreak) {
+	for line, err = reader.ReadString(core.LineBreak); err == nil || (line != "" && err == io.EOF); line, err = reader.ReadString(core.LineBreak) {
 		lineCount++
 		if strings.Contains(line, "NaN") {
 			log.Printf("第%d行记录有NaN值，正在插值\n", lineCount)
 
 			line = strings.TrimSpace(line)
-			data, err := utils.RecordToContainerWorkloadData(strings.Split(line, internal.Splitter))
+			data, err := utils.RecordToContainerWorkloadData(strings.Split(line, core.Splitter))
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("第%d行数据错误", lineCount))
 			}
 			impute.Preprocess(data)
 
 			record := utils.WorkloadDataToStringRecord(data)
-			line = strings.Join(record, internal.Splitter) + string(internal.LineBreak)
+			line = strings.Join(record, core.Splitter) + string(core.LineBreak)
 		}
 		n, err := writer.WriteString(line)
 		if err != nil {

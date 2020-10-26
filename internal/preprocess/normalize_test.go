@@ -2,7 +2,7 @@ package preprocess
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"os"
@@ -12,23 +12,23 @@ import (
 )
 
 func TestNormalize(t *testing.T) {
-	record := make([]string, 1+internal.NumSections*internal.NumSectionFields)
+	record := make([]string, 1+core.NumSections*core.NumSectionFields)
 	record[0] = "test"
-	for i := 0; i < internal.NumSections; i++ {
-		for j := 0; j < internal.NumSectionFields; j++ {
-			record[1+i*internal.NumSectionFields+j] = fmt.Sprintf("%d", i)
+	for i := 0; i < core.NumSections; i++ {
+		for j := 0; j < core.NumSectionFields; j++ {
+			record[1+i*core.NumSectionFields+j] = fmt.Sprintf("%d", i)
 		}
 	}
-	reader := strings.NewReader(strings.Join(record, internal.Splitter))
+	reader := strings.NewReader(strings.Join(record, core.Splitter))
 	builder := &strings.Builder{}
 
 	err := NormalizeSection(reader, builder)
 	assert.NoError(t, err)
 
-	result := strings.Split(builder.String(), internal.Splitter)
-	for i := 0; i < internal.NumSections-1; i++ {
-		for j := 0; j < internal.NumSectionFields; j++ {
-			f, err := strconv.ParseFloat(result[1+i*internal.NumSectionFields+j], 32)
+	result := strings.Split(builder.String(), core.Splitter)
+	for i := 0; i < core.NumSections-1; i++ {
+		for j := 0; j < core.NumSectionFields; j++ {
+			f, err := strconv.ParseFloat(result[1+i*core.NumSectionFields+j], 32)
 			assert.NoError(t, err)
 			assert.Condition(t, func() (success bool) {
 				return !math.IsNaN(f) && f < 1
@@ -36,7 +36,7 @@ func TestNormalize(t *testing.T) {
 		}
 	}
 
-	for i := (internal.NumSections-1)*internal.NumSectionFields + 1; i < len(result); i++ {
+	for i := (core.NumSections-1)*core.NumSectionFields + 1; i < len(result); i++ {
 		assert.Equal(t, "1.00", strings.TrimSpace(result[i]))
 	}
 
@@ -51,7 +51,7 @@ func TestNormalize(t *testing.T) {
 		存在错误数据
 	*/
 	record[1] = "a"
-	err = NormalizeSection(strings.NewReader(strings.Join(record, internal.Splitter)), os.Stdout)
+	err = NormalizeSection(strings.NewReader(strings.Join(record, core.Splitter)), os.Stdout)
 	assert.Error(t, err)
 
 	/*

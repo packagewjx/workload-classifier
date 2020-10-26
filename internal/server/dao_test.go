@@ -2,7 +2,8 @@ package server
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -29,7 +30,7 @@ func TestNewDao(t *testing.T) {
 	db, _ := gorm.Open(mysql.Open(fmt.Sprintf("root:wujunxian@tcp(%s)/metrics?charset=utf8mb4&parseTime=True&loc=Local", testHost)), &gorm.Config{})
 	db.Create(&AppDo{
 		Model: gorm.Model{ID: 1000},
-		AppName: AppName{
+		AppName: server.AppName{
 			Name:      "haha",
 			Namespace: "test",
 		},
@@ -40,10 +41,10 @@ func TestNewDao(t *testing.T) {
 }
 
 func TestDao_SaveAllAppPodMetrics(t *testing.T) {
-	arr := make([]*AppPodMetrics, 10)
+	arr := make([]*server.AppPodMetrics, 10)
 	for i := 0; i < len(arr); i++ {
-		arr[i] = &AppPodMetrics{
-			AppName: AppName{
+		arr[i] = &server.AppPodMetrics{
+			AppName: server.AppName{
 				Name:      fmt.Sprintf("test-%d", i),
 				Namespace: "test",
 			},
@@ -94,10 +95,10 @@ func TestDaoImpl_SaveAppClass(t *testing.T) {
 	/*
 		测试新增
 	*/
-	arr := make([]*AppClass, 10)
+	arr := make([]*server.AppClass, 10)
 	for i := 0; i < len(arr); i++ {
-		arr[i] = &AppClass{
-			AppName: AppName{
+		arr[i] = &server.AppClass{
+			AppName: server.AppName{
 				Name:      fmt.Sprintf("test-%d", i),
 				Namespace: "test",
 			},
@@ -139,8 +140,8 @@ func TestDaoImpl_SaveAppClass(t *testing.T) {
 	/*
 		测试不存在的AppID
 	*/
-	appClass := &AppClass{
-		AppName: AppName{
+	appClass := &server.AppClass{
+		AppName: server.AppName{
 			Name:      "absolutelyNotExistApp",
 			Namespace: "absolutelyNotExistNamespace",
 		},
@@ -151,12 +152,12 @@ func TestDaoImpl_SaveAppClass(t *testing.T) {
 }
 
 func TestDaoImpl_SaveClassMetrics(t *testing.T) {
-	c := &ClassMetrics{
+	c := &server.ClassMetrics{
 		ClassId: 10,
-		Data:    make([]*internal.SectionData, internal.NumSections),
+		Data:    make([]*core.SectionData, core.NumSections),
 	}
 	for i := 0; i < len(c.Data); i++ {
-		c.Data[i] = &internal.SectionData{}
+		c.Data[i] = &core.SectionData{}
 		c.Data[i].CpuAvg = float32(i)
 		c.Data[i].CpuMax = float32(i)
 		c.Data[i].CpuMin = float32(i)
@@ -188,10 +189,10 @@ func TestDaoImpl_SaveClassMetrics(t *testing.T) {
 func TestDaoImpl_RemoveAppPodMetricsBefore(t *testing.T) {
 	dao, _ := NewDao(testHost)
 	size := 10000
-	arr := make([]*AppPodMetrics, size)
+	arr := make([]*server.AppPodMetrics, size)
 	for i := 0; i < size; i++ {
-		arr[i] = &AppPodMetrics{
-			AppName: AppName{
+		arr[i] = &server.AppPodMetrics{
+			AppName: server.AppName{
 				Name:      "test-1",
 				Namespace: "test",
 			},
@@ -225,12 +226,12 @@ func TestDaoImpl_RemoveAppPodMetricsBefore(t *testing.T) {
 func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 	dao, _ := NewDao(testHost)
 	classId := uint(10)
-	c := &ClassMetrics{
+	c := &server.ClassMetrics{
 		ClassId: classId,
-		Data:    make([]*internal.SectionData, internal.NumSections),
+		Data:    make([]*core.SectionData, core.NumSections),
 	}
 	for i := 0; i < len(c.Data); i++ {
-		c.Data[i] = &internal.SectionData{
+		c.Data[i] = &core.SectionData{
 			CpuAvg: float32(i),
 			CpuMax: float32(i),
 			CpuMin: float32(i),
@@ -270,7 +271,7 @@ func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 	err = db.Create(&ClassSectionMetricsDO{
 		ID:          classId,
 		SectionNum:  10,
-		SectionData: internal.SectionData{},
+		SectionData: core.SectionData{},
 	}).Error
 	if !assert.NoError(t, err) {
 		assert.FailNow(t, "插入缺漏数据出错")
@@ -282,12 +283,12 @@ func TestDaoImpl_QueryClassMetricsByClassId(t *testing.T) {
 		查询不缺漏，但是不够数量的数据
 	*/
 	classId = 10001
-	c = &ClassMetrics{
+	c = &server.ClassMetrics{
 		ClassId: classId,
-		Data:    make([]*internal.SectionData, 10),
+		Data:    make([]*core.SectionData, 10),
 	}
 	for i := 0; i < len(c.Data); i++ {
-		c.Data[i] = &internal.SectionData{}
+		c.Data[i] = &core.SectionData{}
 	}
 	err = dao.SaveClassMetrics(c)
 	if !assert.NoError(t, err) {
@@ -313,13 +314,13 @@ func TestDaoImpl_QueryAppClassIdByApp(t *testing.T) {
 		Model: gorm.Model{
 			ID: 10,
 		},
-		AppName: AppName{
+		AppName: server.AppName{
 			Name:      appName,
 			Namespace: namespace,
 		},
 	})
 
-	appClass, err := dao.QueryAppClassByApp(&AppName{
+	appClass, err := dao.QueryAppClassByApp(&server.AppName{
 		Name:      appName,
 		Namespace: namespace,
 	})
@@ -329,7 +330,7 @@ func TestDaoImpl_QueryAppClassIdByApp(t *testing.T) {
 	/*
 		查询不存在的
 	*/
-	_, err = dao.QueryAppClassByApp(&AppName{
+	_, err = dao.QueryAppClassByApp(&server.AppName{
 		Name:      "absolutelyNotExistApp_TestDaoImpl_QueryAppClassIdByApp",
 		Namespace: "absolutelyNotExistNamespace_TestDaoImpl_QueryAppClassIdByApp",
 	})
@@ -365,15 +366,15 @@ func TestDaoImpl_QueryAllClassMetrics(t *testing.T) {
 		assert.FailNow(t, "删除数据失败")
 	}
 
-	testData := make([]*ClassMetrics, DefaultNumClass)
+	testData := make([]*server.ClassMetrics, DefaultNumClass)
 	for i := 0; i < len(testData); i++ {
-		testData[i] = &ClassMetrics{
+		testData[i] = &server.ClassMetrics{
 			ClassId: uint(i + 1), // ID不能为0
-			Data:    make([]*internal.SectionData, internal.NumSections),
+			Data:    make([]*core.SectionData, core.NumSections),
 		}
 
 		for j := 0; j < len(testData[i].Data); j++ {
-			data := &internal.SectionData{}
+			data := &core.SectionData{}
 			val := reflect.ValueOf(data).Elem()
 			for k := 0; k < val.NumField(); k++ {
 				val.Field(k).SetFloat(float64(j))

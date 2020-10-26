@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sort"
@@ -60,7 +60,7 @@ func TestGetSortedPosition(t *testing.T) {
 }
 
 func TestWorkloadToContainerData(t *testing.T) {
-	record := make([]string, internal.NumSections*internal.NumSectionFields+1)
+	record := make([]string, core.NumSections*core.NumSectionFields+1)
 	for i := 1; i < len(record); i++ {
 		record[i] = strconv.FormatFloat(float64(i), 'f', 2, 32)
 	}
@@ -71,37 +71,37 @@ func TestWorkloadToContainerData(t *testing.T) {
 		assert.NotEqual(t, float32(0), data.CpuAvg)
 	}
 	assert.Equal(t, float32(1), cData.Data[0].CpuAvg)
-	assert.Equal(t, float32(internal.NumSectionFields*internal.NumSections), cData.Data[len(cData.Data)-1].MemP99)
+	assert.Equal(t, float32(core.NumSectionFields*core.NumSections), cData.Data[len(cData.Data)-1].MemP99)
 	assert.Equal(t, "test", cData.ContainerId)
 
 	/*
 		测试空数据
 	*/
-	record[internal.NumSections] = ""
+	record[core.NumSections] = ""
 	_, err = RecordsToSectionArray(record)
 	assert.Error(t, err)
 }
 
 func TestWorkloadDataToStringRecord(t *testing.T) {
-	data := &internal.ContainerWorkloadData{
+	data := &core.ContainerWorkloadData{
 		ContainerId: "test",
-		Data:        make([]*internal.SectionData, internal.NumSections),
+		Data:        make([]*core.SectionData, core.NumSections),
 	}
 
 	for i := 0; i < len(data.Data); i++ {
-		data.Data[i] = &internal.SectionData{
-			CpuAvg: float32(i * internal.NumSectionFields),
-			CpuMax: float32(i*internal.NumSectionFields + 1),
-			CpuMin: float32(i*internal.NumSectionFields + 2),
-			CpuP50: float32(i*internal.NumSectionFields + 3),
-			CpuP90: float32(i*internal.NumSectionFields + 4),
-			CpuP99: float32(i*internal.NumSectionFields + 5),
-			MemAvg: float32(i*internal.NumSectionFields + 6),
-			MemMax: float32(i*internal.NumSectionFields + 7),
-			MemMin: float32(i*internal.NumSectionFields + 8),
-			MemP50: float32(i*internal.NumSectionFields + 9),
-			MemP90: float32(i*internal.NumSectionFields + 10),
-			MemP99: float32(i*internal.NumSectionFields + 11),
+		data.Data[i] = &core.SectionData{
+			CpuAvg: float32(i * core.NumSectionFields),
+			CpuMax: float32(i*core.NumSectionFields + 1),
+			CpuMin: float32(i*core.NumSectionFields + 2),
+			CpuP50: float32(i*core.NumSectionFields + 3),
+			CpuP90: float32(i*core.NumSectionFields + 4),
+			CpuP99: float32(i*core.NumSectionFields + 5),
+			MemAvg: float32(i*core.NumSectionFields + 6),
+			MemMax: float32(i*core.NumSectionFields + 7),
+			MemMin: float32(i*core.NumSectionFields + 8),
+			MemP50: float32(i*core.NumSectionFields + 9),
+			MemP90: float32(i*core.NumSectionFields + 10),
+			MemP99: float32(i*core.NumSectionFields + 11),
 		}
 	}
 
@@ -115,10 +115,10 @@ func TestWorkloadDataToStringRecord(t *testing.T) {
 }
 
 func TestContainerWorkloadToFloatArray(t *testing.T) {
-	data := make([]*internal.ContainerWorkloadData, 1)
-	data[0] = &internal.ContainerWorkloadData{
+	data := make([]*core.ContainerWorkloadData, 1)
+	data[0] = &core.ContainerWorkloadData{
 		ContainerId: "test",
-		Data: []*internal.SectionData{
+		Data: []*core.SectionData{
 			{
 				CpuAvg: 1,
 				CpuMax: 2,

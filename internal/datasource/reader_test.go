@@ -1,7 +1,7 @@
 package datasource
 
 import (
-	. "github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
@@ -10,13 +10,13 @@ import (
 type testDataSource int
 
 func (t *testDataSource) Load() (*ContainerMetric, error) {
-	if *t < DayLength {
+	if *t < core.DayLength {
 		temp := *t
 		*t++
 		return &ContainerMetric{
 			ContainerId: "test",
-			Cpu:         float32(temp%SectionLength) / float32(SectionLength),
-			Mem:         float32(temp%SectionLength) / float32(SectionLength),
+			Cpu:         float32(temp%core.SectionLength) / float32(core.SectionLength),
+			Mem:         float32(temp%core.SectionLength) / float32(core.SectionLength),
 			Timestamp:   uint64(temp),
 		}, nil
 	}
@@ -32,7 +32,7 @@ func TestDataSourceRawDataReader_Read(t *testing.T) {
 	assert.Equal(t, 1, len(read))
 	data := read[0]
 	assert.Equal(t, "test", data.ContainerId)
-	assert.Equal(t, NumSections, len(data.Data))
-	assert.Equal(t, SectionLength, len(data.Data[0].Cpu))
-	assert.Equal(t, SectionLength, len(data.Data[0].Mem))
+	assert.Equal(t, core.NumSections, len(data.Data))
+	assert.Equal(t, core.SectionLength, len(data.Data[0].Cpu))
+	assert.Equal(t, core.SectionLength, len(data.Data[0].Mem))
 }

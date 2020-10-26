@@ -1,20 +1,15 @@
 package server
 
 import (
-	"github.com/packagewjx/workload-classifier/internal"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"reflect"
 )
 
-type API interface {
-	QueryAppCharacteristics(appName AppName) (*AppCharacteristics, error)
-
-	ReCluster()
-}
-
-func (s *serverImpl) QueryAppCharacteristics(appName AppName) (*AppCharacteristics, error) {
+func (s *serverImpl) QueryAppCharacteristics(appName server.AppName) (*server.AppCharacteristics, error) {
 	s.logger.Printf("接收到查询名称空间为%s，名称为%s的请求\n", appName.Namespace, appName.Name)
 	appClass, err := s.dao.QueryAppClassByApp(&appName)
-	if err == ErrAppNotFound || err == ErrAppNotClassified {
+	if err == server.ErrAppNotFound || err == server.ErrAppNotClassified {
 		return nil, err
 	} else if err != nil {
 		s.logger.Printf("查询AppClass失败，原因为：%v\n", err)
@@ -27,15 +22,15 @@ func (s *serverImpl) QueryAppCharacteristics(appName AppName) (*AppCharacteristi
 		return nil, err
 	}
 
-	result := &AppCharacteristics{
+	result := &server.AppCharacteristics{
 		AppName:     appName,
-		SectionData: make([]*internal.SectionData, len(metric.Data)),
+		SectionData: make([]*core.SectionData, len(metric.Data)),
 	}
 
-	typ := reflect.TypeOf(internal.SectionData{})
+	typ := reflect.TypeOf(core.SectionData{})
 	for i, datum := range metric.Data {
 		classVal := reflect.ValueOf(datum).Elem()
-		sectionData := &internal.SectionData{}
+		sectionData := &core.SectionData{}
 		appVal := reflect.ValueOf(sectionData).Elem()
 
 		for fi := 0; fi < classVal.NumField(); fi++ {

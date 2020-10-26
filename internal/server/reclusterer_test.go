@@ -2,9 +2,10 @@ package server
 
 import (
 	"fmt"
-	"github.com/packagewjx/workload-classifier/internal"
 	"github.com/packagewjx/workload-classifier/internal/alitrace"
 	"github.com/packagewjx/workload-classifier/internal/preprocess"
+	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"math"
@@ -21,7 +22,7 @@ func TestReadInitialCenters(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 20, len(centers))
 	for _, center := range centers {
-		assert.Equal(t, internal.NumSections, len(center.Data))
+		assert.Equal(t, core.NumSections, len(center.Data))
 		for _, datum := range center.Data {
 			v := reflect.ValueOf(*datum)
 			for i := 0; i < v.NumField(); i++ {
@@ -42,24 +43,24 @@ func TestReadInitialCenters(t *testing.T) {
 	assert.Error(t, err)
 
 	// 读取一行中间有错误数据的数据
-	falseString := make([]string, internal.NumSectionFields*internal.NumSections)
+	falseString := make([]string, core.NumSectionFields*core.NumSections)
 	for i := 0; i < len(falseString); i++ {
 		falseString[i] = strconv.FormatInt(int64(i), 10)
 	}
-	falseString[internal.NumSections] = ""
+	falseString[core.NumSections] = ""
 	reader = strings.NewReader(strings.Join(falseString, ","))
 	_, err = readInitialCenter(reader)
 	assert.Error(t, err)
 }
 
 func TestFloatArrayToClassMetrics(t *testing.T) {
-	arr := make([]float32, internal.NumSections*internal.NumSectionFields)
+	arr := make([]float32, core.NumSections*core.NumSectionFields)
 	for i := 0; i < len(arr); i++ {
 		arr[i] = float32(i)
 	}
 	metrics := floatArrayToClassMetrics(1, arr)
 	assert.Equal(t, uint(1), metrics.ClassId)
-	assert.Equal(t, internal.NumSections, len(metrics.Data))
+	assert.Equal(t, core.NumSections, len(metrics.Data))
 	assert.Equal(t, float32(1), metrics.Data[0].CpuMax)
 }
 
@@ -95,7 +96,7 @@ func TestReCluster(t *testing.T) {
 	preprocessor := preprocess.Default()
 	for i, metrics := range center {
 		metrics.ClassId = uint(i + 1)
-		temp := &internal.ContainerWorkloadData{
+		temp := &core.ContainerWorkloadData{
 			ContainerId: fmt.Sprintf("%d", metrics.ClassId),
 			Data:        metrics.Data,
 		}
@@ -109,11 +110,11 @@ func TestReCluster(t *testing.T) {
 	// 导入监控数据
 	metricsFin, _ := os.Open("../../test/csv/30containers.csv")
 	datasource := alitrace.NewAlitraceDatasource(metricsFin)
-	podMetrics := make([]*AppPodMetrics, 0, 30000)
-	appNameSet := map[AppName]struct{}{}
+	podMetrics := make([]*server.AppPodMetrics, 0, 30000)
+	appNameSet := map[server.AppName]struct{}{}
 	for r, err := datasource.Load(); err == nil; r, err = datasource.Load() {
-		pm := &AppPodMetrics{
-			AppName: AppName{
+		pm := &server.AppPodMetrics{
+			AppName: server.AppName{
 				Name:      r.ContainerId,
 				Namespace: "test",
 			},

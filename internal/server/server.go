@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/packagewjx/workload-classifier/pkg/server"
 	"github.com/pkg/errors"
 	"log"
 	"net/http"
@@ -121,9 +122,9 @@ func (s *serverImpl) Start() error {
 
 	go s.reClusterer(reClustererContext)
 
-	server := s.buildServer()
+	srv := s.buildServer()
 	errCh := make(chan error)
-	go s.serve(server, errCh)
+	go s.serve(srv, errCh)
 
 	// 注册信号接收器
 	termSigChan := make(chan os.Signal)
@@ -131,7 +132,7 @@ func (s *serverImpl) Start() error {
 
 	select {
 	case <-termSigChan:
-		err := server.Shutdown(rootCtx)
+		err := srv.Shutdown(rootCtx)
 		if err != nil {
 			return errors.Wrap(err, "关闭HTTP服务器失败")
 		}
@@ -160,15 +161,15 @@ func (s *serverImpl) buildServer() *http.Server {
 		subMatch := pattern.FindStringSubmatch(request.URL.Path)
 		namespace := subMatch[1]
 		name := subMatch[2]
-		characteristics, err := s.QueryAppCharacteristics(AppName{
+		characteristics, err := s.QueryAppCharacteristics(server.AppName{
 			Name:      name,
 			Namespace: namespace,
 		})
-		if err == ErrAppNotFound {
+		if err == server.ErrAppNotFound {
 			writer.WriteHeader(http.StatusNotFound)
 			_, _ = writer.Write([]byte(err.Error()))
 			return
-		} else if err == ErrAppNotClassified {
+		} else if err == server.ErrAppNotClassified {
 			writer.WriteHeader(http.StatusBadRequest)
 			_, _ = writer.Write([]byte(err.Error()))
 			return
