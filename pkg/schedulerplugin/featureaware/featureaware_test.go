@@ -11,7 +11,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/events"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
+	metrics "k8s.io/metrics/pkg/apis/metrics/v1alpha1"
 	"testing"
 )
 
@@ -197,6 +202,60 @@ func makePods(requestList []requirement) []*framework.PodInfo {
 	return nodePods
 }
 
+func TestNodeUtilization(t *testing.T) {
+	nodeInfo := &framework.NodeInfo{}
+	nodeInfo.SetNode(&corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+		Status: corev1.NodeStatus{
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceCPU:    *resource.NewMilliQuantity(4000, resource.DecimalSI),
+				corev1.ResourceMemory: *resource.NewQuantity(2000, resource.BinarySI),
+			},
+		},
+	})
+	fakeClient := &fakeMetricsClient{
+		nodeCpu: 2,
+		nodeMem: 2000,
+	}
+
+	result, _ := nodeUtilization(nodeInfo, fakeClient)
+	assert.Equal(t, float32(0.75), result)
+}
+
+func TestScore(t *testing.T) {
+	plugin, _ := New(nil, nil)
+	featurePlugin := plugin.(*featureAwarePlugin)
+	featurePlugin.handle = &fakeHandle{
+		lister: &fakeSharedLister{
+			nodeInfoLister: &fakeNodeInfoLister{
+				node: &corev1.Node{
+					TypeMeta:   metav1.TypeMeta{},
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec:       corev1.NodeSpec{},
+					Status: corev1.NodeStatus{
+						Allocatable: corev1.ResourceList{
+							corev1.ResourceCPU:    *resource.NewQuantity(4, resource.DecimalSI),
+							corev1.ResourceMemory: *resource.NewQuantity(4000, resource.BinarySI),
+						},
+					},
+				},
+			}},
+	}
+	featurePlugin.metricsClient = fakeMetricsClient{
+		nodeCpu: 2,
+		nodeMem: 2000,
+	}
+
+	score, status := featurePlugin.Score(context.Background(), framework.NewCycleState(), &corev1.Pod{}, "test")
+	assert.Condition(t, func() (success bool) {
+		return status.Code() == framework.Success
+	})
+
+	assert.Equal(t, int64(50), score)
+}
+
 func makeNodeInfo(pods []*framework.PodInfo, nodeCpu int64, nodeMem int64) *framework.NodeInfo {
 	cpuRequest := int64(0)
 	memRequest := int64(0)
@@ -220,8 +279,8 @@ func makeNodeInfo(pods []*framework.PodInfo, nodeCpu int64, nodeMem int64) *fram
 			Memory:   memRequest,
 		},
 		Allocatable: &framework.Resource{
-			MilliCPU: 1000 * (nodeCpu - cpuRequest),
-			Memory:   nodeMem - memRequest,
+			MilliCPU: 1000 * nodeCpu,
+			Memory:   nodeMem,
 		},
 	}
 	return nodeInfo
@@ -263,4 +322,84 @@ func (f *fakeApi) QueryAppCharacteristics(appName server2.AppName) (*server2.App
 
 func (f *fakeApi) ReCluster() {
 	panic("implement me")
+}
+
+type fakeMetricsClient struct {
+	nodeCpu int64
+	nodeMem int64
+}
+
+func (f fakeMetricsClient) QueryAllPodMetrics() (*metrics.PodMetricsList, error) {
+	panic("implement me")
+}
+
+func (f fakeMetricsClient) QueryNodeMetrics(_ string) (*metrics.NodeMetrics, error) {
+	return &metrics.NodeMetrics{
+		Usage: corev1.ResourceList{
+			corev1.ResourceCPU:    *resource.NewQuantity(f.nodeCpu, resource.DecimalSI),
+			corev1.ResourceMemory: *resource.NewQuantity(f.nodeMem, resource.BinarySI),
+		},
+	}, nil
+}
+
+type fakeHandle struct {
+	lister framework.SharedLister
+}
+
+func (f *fakeHandle) SnapshotSharedLister() framework.SharedLister {
+	return f.lister
+}
+
+func (f fakeHandle) IterateOverWaitingPods(callback func(framework.WaitingPod)) {
+	panic("implement me")
+}
+
+func (f fakeHandle) GetWaitingPod(uid types.UID) framework.WaitingPod {
+	panic("implement me")
+}
+
+func (f fakeHandle) RejectWaitingPod(uid types.UID) {
+	panic("implement me")
+}
+
+func (f fakeHandle) ClientSet() kubernetes.Interface {
+	panic("implement me")
+}
+
+func (f fakeHandle) EventRecorder() events.EventRecorder {
+	panic("implement me")
+}
+
+func (f fakeHandle) SharedInformerFactory() informers.SharedInformerFactory {
+	panic("implement me")
+}
+
+func (f fakeHandle) PreemptHandle() framework.PreemptHandle {
+	panic("implement me")
+}
+
+type fakeSharedLister struct {
+	nodeInfoLister framework.NodeInfoLister
+}
+
+func (f *fakeSharedLister) NodeInfos() framework.NodeInfoLister {
+	return f.nodeInfoLister
+}
+
+type fakeNodeInfoLister struct {
+	node *corev1.Node
+}
+
+func (f fakeNodeInfoLister) List() ([]*framework.NodeInfo, error) {
+	panic("implement me")
+}
+
+func (f fakeNodeInfoLister) HavePodsWithAffinityList() ([]*framework.NodeInfo, error) {
+	panic("implement me")
+}
+
+func (f *fakeNodeInfoLister) Get(nodeName string) (*framework.NodeInfo, error) {
+	res := &framework.NodeInfo{}
+	res.SetNode(f.node)
+	return res, nil
 }

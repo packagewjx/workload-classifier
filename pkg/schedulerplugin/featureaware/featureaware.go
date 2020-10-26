@@ -6,6 +6,7 @@ import (
 	"github.com/packagewjx/workload-classifier/internal/server"
 	"github.com/packagewjx/workload-classifier/pkg/client"
 	"github.com/packagewjx/workload-classifier/pkg/core"
+	"github.com/packagewjx/workload-classifier/pkg/metricsclient"
 	server2 "github.com/packagewjx/workload-classifier/pkg/server"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,20 +18,35 @@ var _ framework.FilterPlugin = &featureAwarePlugin{}
 var _ framework.ScorePlugin = &featureAwarePlugin{}
 
 type featureAwarePlugin struct {
-	client server2.API
+	handle        framework.FrameworkHandle
+	client        server2.API
+	metricsClient metricsclient.Client
 }
 
-func (f *featureAwarePlugin) Score(ctx context.Context, state *framework.CycleState, p *corev1.Pod, nodeName string) (int64, *framework.Status) {
-	panic("implement me")
+func (f *featureAwarePlugin) Score(_ context.Context, _ *framework.CycleState, _ *corev1.Pod, nodeName string) (int64, *framework.Status) {
+	nodeInfo, err := f.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
+	if err != nil || nodeInfo == nil {
+		return 0, framework.NewStatus(framework.Unschedulable, "获取NodeInfo出错")
+	}
+
+	utilization, err := nodeUtilization(nodeInfo, f.metricsClient)
+	if err != nil {
+		return 0, framework.NewStatus(framework.Error, fmt.Sprintf("计算使用率错误：%v", err))
+	}
+
+	// 利用率越低，分数越高
+	return 100 - int64(utilization*100), framework.NewStatus(framework.Success)
 }
 
 func (f *featureAwarePlugin) ScoreExtensions() framework.ScoreExtensions {
 	return nil
 }
 
-func New(_ runtime.Object, _ framework.FrameworkHandle) (framework.Plugin, error) {
+func New(_ runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, error) {
 	return &featureAwarePlugin{
-		client: client.NewApiClient(),
+		client:        client.NewApiClient(),
+		handle:        handle,
+		metricsClient: metricsclient.NewHttpMetricsClient(metricsclient.DefaultKubeApiServerBaseUrl),
 	}, nil
 }
 
@@ -41,8 +57,8 @@ func (f *featureAwarePlugin) Name() string {
 func (f *featureAwarePlugin) Filter(_ context.Context, _ *framework.CycleState, pod *corev1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	if pod.Status.QOSClass == corev1.PodQOSBestEffort {
 		// 离线任务处理逻辑
-		cpuAllocatable := float32(0)
-		memAllocatable := float32(0)
+		cpuIdle := float32(0)
+		memIdle := float32(0)
 		sectionIdx := time.Now().Unix() % core.DayLength / core.SectionLength
 
 		podCpuRequest, podMemRequest := podTotalRequest(pod)
@@ -85,15 +101,16 @@ func (f *featureAwarePlugin) Filter(_ context.Context, _ *framework.CycleState, 
 			}
 
 			data := characteristics.SectionData[sectionIdx]
-			cpuAllocatable += cpu - data.CpuMax
-			memAllocatable += mem - data.MemMax
+			cpuIdle += cpu - data.CpuMax
+			memIdle += mem - data.MemMax
 		}
 
-		cpuAllocatable += float32(nodeInfo.Allocatable.MilliCPU) / 1000
-		memAllocatable += float32(nodeInfo.Allocatable.Memory)
+		cpuAllocatable := cpuIdle + float32(nodeInfo.Allocatable.MilliCPU-nodeInfo.Requested.MilliCPU)/1000
+		memAllocatable := memIdle + float32(nodeInfo.Allocatable.Memory-nodeInfo.Requested.Memory)
+
 		if cpuAllocatable < podCpuRequest || memAllocatable < podMemRequest {
 			return framework.NewStatus(framework.Unschedulable,
-				fmt.Sprintf("空闲可用CPU：%f，空闲可用内存：%f。需要CPU：%f，需要内存：%f",
+				fmt.Sprintf("资源不足。可分配CPU：%f，可分配内存：%f。需要CPU：%f，需要内存：%f",
 					cpuAllocatable, memAllocatable, podCpuRequest, podMemRequest))
 		}
 	} else {
@@ -109,4 +126,21 @@ func podTotalRequest(p *corev1.Pod) (cpu, mem float32) {
 		mem += float32(container.Resources.Requests.Memory().Value())
 	}
 	return
+}
+
+// 计算节点的总资源利用率。返回值范围0到1
+func nodeUtilization(nodeInfo *framework.NodeInfo, metricsClient metricsclient.Client) (float32, error) {
+	allocatable := nodeInfo.Allocatable
+
+	// 获取节点的监控数据
+	metrics, err := metricsClient.QueryNodeMetrics(nodeInfo.Node().Name)
+	if err != nil {
+		return 0, err
+	}
+
+	usage := metrics.Usage
+
+	util := (float32(usage.Cpu().MilliValue())/float32(allocatable.MilliCPU) + float32(usage.Memory().Value())/float32(allocatable.Memory)) / 2
+
+	return util, nil
 }

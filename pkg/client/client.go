@@ -21,8 +21,8 @@ type apiClient struct {
 }
 
 func (a *apiClient) QueryAppCharacteristics(appName server.AppName) (*server.AppCharacteristics, error) {
-	response, err := http.Get(fmt.Sprintf(defaultApiHostBaseUrl+"/namespaces/%s/appcharacteristics/%s",
-		appName.Namespace, appName.Name))
+	response, err := http.Get(fmt.Sprintf("%s/namespaces/%s/appcharacteristics/%s",
+		defaultApiHostBaseUrl, appName.Namespace, appName.Name))
 	if err != nil {
 		return nil, errors.Wrap(err, "请求时出现异常")
 	}
