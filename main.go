@@ -15,8 +15,10 @@ limitations under the License.
 */
 package main
 
-import "github.com/packagewjx/workload-classifier/cmd"
+import (
+	"github.com/packagewjx/workload-classifier/cmd/workload-classifier"
+)
 
 func main() {
-	cmd.Execute()
+	workload_classifier.Execute()
 }

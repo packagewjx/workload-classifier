@@ -17,6 +17,8 @@ import (
 var _ framework.FilterPlugin = &featureAwarePlugin{}
 var _ framework.ScorePlugin = &featureAwarePlugin{}
 
+const PluginName = "FeatureAware"
+
 type featureAwarePlugin struct {
 	handle        framework.FrameworkHandle
 	client        server2.API
@@ -51,7 +53,7 @@ func New(_ runtime.Object, handle framework.FrameworkHandle) (framework.Plugin, 
 }
 
 func (f *featureAwarePlugin) Name() string {
-	return "FeatureAware"
+	return PluginName
 }
 
 func (f *featureAwarePlugin) Filter(_ context.Context, _ *framework.CycleState, pod *corev1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {

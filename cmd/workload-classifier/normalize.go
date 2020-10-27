@@ -13,43 +13,44 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package cmd
+package workload_classifier
 
 import (
+	"fmt"
 	"github.com/packagewjx/workload-classifier/internal/preprocess"
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
-// imputeCmd represents the impute command
-var imputeCmd = &cobra.Command{
-	Use:   "impute inputFile outputFile",
-	Short: "填充NaN数据",
-	Long: "使用线性函数方式填充NaN数据。两端如果有NaN，则计算一次函数时默认开始或结束的数据为0,另一个端点则为第一个或最后一个有效值。" +
-		"若中间为NaN，则使用两端有效数据计算一次函数并填充NaN。",
+// normalizeCmd represents the normalize command
+var normalizeCmd = &cobra.Command{
+	Use:   "normalize infile outfile",
+	Short: "将转换后的数据标准化",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if 2 != len(args) {
-			return errors.New("参数错误")
-		} else if args[0] == args[1] {
-			return errors.New("输入输出不能一致")
+		if len(args) != 2 {
+			return fmt.Errorf("参数错误")
 		}
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fin, err := os.Open(args[0])
+		in, err := os.Open(args[0])
 		if err != nil {
 			return errors.Wrap(err, "打开输入文件错误")
 		}
-		fout, err := os.Create(args[1])
+		out, err := os.Create(args[1])
 		if err != nil {
 			return errors.Wrap(err, "创建输出文件错误")
 		}
+		defer func() {
+			_ = out.Close()
+		}()
 
-		return preprocess.ImputeMissingValues(fin, fout)
+		return preprocess.NormalizeSection(in, out)
 	},
 }
 
 func init() {
-	preprocessCmd.AddCommand(imputeCmd)
+	preprocessCmd.AddCommand(normalizeCmd)
 }
